@@ -146,8 +146,12 @@ export default function Page() {
         setPersistedRoom(urlRoom);
         localStorage.setItem('buzzer_room', urlRoom);
       }
-    } else if (storedRoom) {
+    } else if (storedRoom && /^[A-Z]{4}$/.test(storedRoom)) {
       setPersistedRoom(storedRoom);
+    } else if (storedRoom) {
+      // stored code the server would reject (e.g. "AA") — drop it so the
+      // user lands on the entry screen instead of a dead room
+      localStorage.removeItem('buzzer_room');
     }
   }, []);
 
@@ -266,11 +270,19 @@ export default function Page() {
     prevOverRef.current = over;
   }, [game, persistedName]);
 
+  const [roomError, setRoomError] = useState('');
+
   const handleNameAndRoomSubmit = (e) => {
     e.preventDefault();
     if (name.trim()) {
       const trimmed = name.trim();
-      const code = roomCode.toUpperCase() || generateRoomCode();
+      const typed = roomCode.toUpperCase();
+      if (typed && !/^[A-Z]{4}$/.test(typed)) {
+        setRoomError('Room code must be exactly 4 letters');
+        return;
+      }
+      setRoomError('');
+      const code = typed || generateRoomCode();
       setPersistedName(trimmed);
       setPersistedRoom(code);
       localStorage.setItem('buzzer_name', trimmed);
@@ -396,6 +408,7 @@ export default function Page() {
               placeholder="Room code (leave blank for new)"
               maxLength="4"
             />
+            {roomError && <p className="form-error">{roomError}</p>}
             <button type="submit">Join Game</button>
           </form>
         </div>
@@ -464,7 +477,11 @@ export default function Page() {
 
       <div className="game-main">
         <div className="grid-container">
-          {game && <Grid game={game} isOwner={isOwner} persistedName={persistedName} persistedRoom={persistedRoom} />}
+          {game ? (
+            <Grid game={game} isOwner={isOwner} persistedName={persistedName} persistedRoom={persistedRoom} />
+          ) : (
+            <div className="connecting">Connecting to room…</div>
+          )}
         </div>
         <div className="scoreboard-container">
           {game && (
