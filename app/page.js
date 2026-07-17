@@ -79,6 +79,7 @@ export default function Page() {
   const [locked, setLocked] = useState(true);
   const [owner, setOwner] = useState('');
   const [users, setUsers] = useState([]);
+  const [copied, setCopied] = useState(false);
   const prevLenRef = useRef(0);
   const offsetRef = useRef(0); // serverTime ≈ Date.now() + offset
   const nameInputRef = useRef(null);
@@ -117,14 +118,24 @@ export default function Page() {
     };
   }, [persistedName, persistedRoom]);
 
-  // Load persisted name and room
+  // Load persisted name and room; a ?room=ABCD link wins over the stored room
   useEffect(() => {
     const storedName = localStorage.getItem('buzzer_name');
     const storedRoom = localStorage.getItem('buzzer_room');
+    const urlRoom = (
+      new URLSearchParams(window.location.search).get('room') || ''
+    ).toUpperCase();
+
     if (storedName) {
       setPersistedName(storedName);
     }
-    if (storedRoom) {
+    if (/^[A-Z]{4}$/.test(urlRoom)) {
+      setRoomCode(urlRoom); // prefill entry form
+      if (storedName) {
+        setPersistedRoom(urlRoom);
+        localStorage.setItem('buzzer_room', urlRoom);
+      }
+    } else if (storedRoom) {
       setPersistedRoom(storedRoom);
     }
   }, []);
@@ -132,6 +143,9 @@ export default function Page() {
   // Set up EventSource connection
   useEffect(() => {
     if (!persistedName || !persistedRoom) return;
+
+    // Keep the address bar shareable
+    window.history.replaceState(null, '', `/?room=${persistedRoom}`);
 
     const es = new EventSource(
       `/api/stream?room=${persistedRoom}&name=${encodeURIComponent(persistedName)}`
@@ -191,10 +205,28 @@ export default function Page() {
     setPersistedName('');
     setPersistedRoom('');
     localStorage.removeItem('buzzer_room');
+    window.history.replaceState(null, '', '/');
     setUsers([]);
     setLocked(true);
     setOwner('');
     setBuzzes([]);
+  };
+
+  const handleCopyLink = async () => {
+    const link = `${window.location.origin}/?room=${persistedRoom}`;
+    try {
+      await navigator.clipboard.writeText(link);
+    } catch (e) {
+      // clipboard API needs a secure context; plain http over LAN doesn't have one
+      const ta = document.createElement('textarea');
+      ta.value = link;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   };
 
   const handleBuzz = async () => {
@@ -295,7 +327,12 @@ export default function Page() {
     <div className={`container buzz-screen ${flash ? 'flash' : ''}`}>
       <div className="buzz-header">
         <h1>BUZZER</h1>
-        <div className="room-badge">ROOM {persistedRoom}</div>
+        <div className="room-badge">
+          ROOM {persistedRoom}
+          <button className="copy-btn" onClick={handleCopyLink}>
+            {copied ? 'Copied!' : 'Copy link'}
+          </button>
+        </div>
       </div>
 
       <button
