@@ -82,6 +82,7 @@ export default function Page() {
   const [copied, setCopied] = useState(false);
   const prevLenRef = useRef(0);
   const offsetRef = useRef(0); // serverTime ≈ Date.now() + offset
+  const revealTimerRef = useRef(null);
   const nameInputRef = useRef(null);
   const roomInputRef = useRef(null);
 
@@ -147,6 +148,22 @@ export default function Page() {
     // Keep the address bar shareable
     window.history.replaceState(null, '', `/?room=${persistedRoom}`);
 
+    // Unlocks carry a server-clock instant `at`; reveal the button at that
+    // exact moment (translated to local time) so nobody's ping is a head start.
+    const applyLock = (isLocked, at) => {
+      clearTimeout(revealTimerRef.current);
+      if (isLocked) {
+        setLocked(true);
+        return;
+      }
+      const delay = (at || 0) - offsetRef.current - Date.now();
+      if (delay > 0) {
+        revealTimerRef.current = setTimeout(() => setLocked(false), delay);
+      } else {
+        setLocked(false);
+      }
+    };
+
     const es = new EventSource(
       `/api/stream?room=${persistedRoom}&name=${encodeURIComponent(persistedName)}`
     );
@@ -156,7 +173,7 @@ export default function Page() {
 
       if (data.type === 'init') {
         setBuzzes(data.buzzes);
-        setLocked(data.locked);
+        applyLock(data.locked, data.unlockAt);
         setOwner(data.owner);
         setUsers(data.users || []);
         prevLenRef.current = data.buzzes.length;
@@ -170,10 +187,10 @@ export default function Page() {
         prevLenRef.current = data.buzzes.length;
       } else if (data.type === 'reset') {
         setBuzzes([]);
-        setLocked(data.locked);
+        applyLock(data.locked, 0);
         prevLenRef.current = 0;
       } else if (data.type === 'lock') {
-        setLocked(data.locked);
+        applyLock(data.locked, data.at);
       } else if (data.type === 'presence') {
         setUsers(data.users || []);
       }
@@ -182,6 +199,7 @@ export default function Page() {
     // no onerror handler: EventSource auto-reconnects, and 'init' resyncs state
 
     return () => {
+      clearTimeout(revealTimerRef.current);
       es.close();
     };
   }, [persistedName, persistedRoom]);

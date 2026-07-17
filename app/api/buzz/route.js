@@ -16,7 +16,7 @@ export async function POST(request) {
     return Response.json({ error: 'Room not found' }, { status: 404 });
   }
 
-  if (room.locked) {
+  if (room.locked || Date.now() < (room.unlockAt || 0)) {
     return Response.json({ error: 'locked' }, { status: 409 });
   }
 

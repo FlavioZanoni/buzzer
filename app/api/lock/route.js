@@ -21,10 +21,15 @@ export async function POST(request) {
     return Response.json({ error: 'Not owner' }, { status: 403 });
   }
 
-  setLocked(room, Boolean(locked));
+  // Unlock takes effect 300ms in the future (server clock) so every client's
+  // button opens at the same instant regardless of ping.
+  const isLocked = Boolean(locked);
+  const at = isLocked ? 0 : Date.now() + 300;
+  setLocked(room, isLocked, at);
   const event = {
     type: 'lock',
-    locked: Boolean(locked),
+    locked: isLocked,
+    at,
   };
   broadcastToRoom(room, event);
 

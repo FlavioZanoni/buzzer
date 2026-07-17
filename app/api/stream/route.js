@@ -51,6 +51,7 @@ export async function GET(request) {
           delta: buzzes.length > 0 ? b.ts - buzzes[0].ts : 0,
         })),
         locked: room.locked,
+        unlockAt: room.unlockAt || 0,
         owner: room.owner,
         users: users.map((u) => ({
           name: u.name,
