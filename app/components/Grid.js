@@ -29,7 +29,10 @@ export default function Grid({ game, isOwner, persistedName, persistedRoom }) {
 
   const categories = game.categories;
   const rowCount = categories[0]?.clues.length || 0;
-  const cols = { gridTemplateColumns: `repeat(${categories.length}, 1fr)` };
+  // minmax(0,1fr): long category names must squeeze, never widen the board
+  const cols = {
+    gridTemplateColumns: `repeat(${categories.length}, minmax(0, 1fr))`,
+  };
 
   return (
     <div className="grid">

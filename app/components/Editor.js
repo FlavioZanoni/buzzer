@@ -255,7 +255,7 @@ export default function Editor({
             <div
               key={rowIdx}
               className="editor-row"
-              style={{ gridTemplateColumns: `repeat(${categories.length}, 1fr)` }}
+              style={{ gridTemplateColumns: `repeat(${categories.length}, minmax(0, 1fr))` }}
             >
               {categories.map((cat, catIdx) => {
                 const clue = cat.clues[rowIdx];

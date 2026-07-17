@@ -683,10 +683,12 @@ h1 {
   background: rgba(6, 12, 233, 0.5);
   border: 2px solid #FFCC00;
   border-radius: 6px;
-  padding: 12px;
+  padding: clamp(4px, 0.8vw, 12px);
   text-align: center;
   font-weight: 700;
-  font-size: 14px;
+  font-size: clamp(8px, 1.1vw, 14px);
+  overflow-wrap: anywhere;
+  min-width: 0;
   color: #FFCC00;
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -755,11 +757,11 @@ h1 {
 
 .cell-value {
   display: block;
-  font-size: 28px;
+  font-size: clamp(11px, 2vw, 28px);
 }
 
 .cell-used {
-  font-size: 32px;
+  font-size: clamp(14px, 2.2vw, 32px);
 }
 
 .cell-unfilled {
