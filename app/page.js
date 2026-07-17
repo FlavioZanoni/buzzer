@@ -5,6 +5,7 @@ import confetti from 'canvas-confetti';
 import Grid from './components/Grid';
 import Scoreboard from './components/Scoreboard';
 import ClueOverlay from './components/ClueOverlay';
+import RevealOverlay from './components/RevealOverlay';
 import Editor from './components/Editor';
 
 const playAirhorn = async () => {
@@ -446,6 +447,18 @@ export default function Page() {
         onLock={handleLock}
         offsetRef={offsetRef}
         timerEndsAt={timerEndsAt}
+      />
+    );
+  }
+
+  // If reveal is showing, show reveal overlay
+  if (game?.reveal && !game?.active) {
+    return (
+      <RevealOverlay
+        game={game}
+        persistedName={persistedName}
+        persistedRoom={persistedRoom}
+        owner={owner}
       />
     );
   }

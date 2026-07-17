@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import MediaContent from './MediaContent';
 
 // Short "time's up" beep via the shared AudioContext
 function playTimeUp() {
@@ -27,18 +28,6 @@ function playTimeUp() {
   }
 }
 
-// Extract YouTube ID from various URL formats
-function extractYouTubeId(content) {
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
-  ];
-  for (const pattern of patterns) {
-    const match = content.match(pattern);
-    if (match) return match[1];
-  }
-  return null;
-}
-
 export default function ClueOverlay({
   game,
   buzzes,
@@ -53,12 +42,14 @@ export default function ClueOverlay({
   timerEndsAt,
 }) {
   const [remainingMs, setRemainingMs] = useState(null);
+  const [initialRemainingMs, setInitialRemainingMs] = useState(null);
   const beepedRef = useRef(false);
 
   // Tick the countdown against the server clock (endsAt is server time)
   useEffect(() => {
     if (!timerEndsAt) {
       setRemainingMs(null);
+      setInitialRemainingMs(null);
       beepedRef.current = false;
       return;
     }
@@ -68,6 +59,10 @@ export default function ClueOverlay({
         timerEndsAt - (offsetRef?.current || 0) - Date.now()
       );
       setRemainingMs(left);
+      // Capture initial remaining time when timer first starts
+      if (initialRemainingMs === null && left > 0) {
+        setInitialRemainingMs(left);
+      }
       if (left === 0 && !beepedRef.current) {
         beepedRef.current = true;
         playTimeUp();
@@ -76,7 +71,7 @@ export default function ClueOverlay({
     tick();
     const id = setInterval(tick, 100);
     return () => clearInterval(id);
-  }, [timerEndsAt, offsetRef]);
+  }, [timerEndsAt, offsetRef, initialRemainingMs]);
 
   if (!game?.active) return null;
 
@@ -105,47 +100,10 @@ export default function ClueOverlay({
     buzzState = 'locked';
   }
 
-  // Render clue content by kind
-  let clueContent = null;
-  if (active.kind === 'text') {
-    clueContent = (
-      <div className="clue-text">
-        <p>{active.content}</p>
-      </div>
-    );
-  } else if (active.kind === 'image') {
-    clueContent = (
-      <div className="clue-image">
-        <img src={active.content} alt="Clue" />
-      </div>
-    );
-  } else if (active.kind === 'audio') {
-    clueContent = (
-      <div className="clue-audio">
-        <div className="audio-icon">♪</div>
-        <audio controls>
-          <source src={active.content} />
-        </audio>
-      </div>
-    );
-  } else if (active.kind === 'youtube') {
-    const youtubeId = extractYouTubeId(active.content);
-    if (youtubeId) {
-      clueContent = (
-        <div className="clue-youtube">
-          <iframe
-            width="560"
-            height="315"
-            src={`https://www.youtube.com/embed/${youtubeId}`}
-            title="Clue Video"
-            frameBorder="0"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-          />
-        </div>
-      );
-    }
-  }
+  // Calculate timer progress percentage
+  const timerProgress = initialRemainingMs && remainingMs !== null
+    ? Math.max(0, Math.min(100, (remainingMs / initialRemainingMs) * 100))
+    : 100;
 
   const handleJudge = async (verdict) => {
     await fetch('/api/judge', {
@@ -161,6 +119,9 @@ export default function ClueOverlay({
 
   return (
     <div className={`clue-overlay ${flash ? 'flash' : ''}`}>
+      {timerEndsAt > 0 && remainingMs !== null && (
+        <div className="clue-timer-bar" style={{ width: `${timerProgress}%` }} />
+      )}
       <div className="clue-container">
         <div className="clue-header">
           <div className="clue-title">
@@ -168,13 +129,18 @@ export default function ClueOverlay({
             <span className="clue-value">${active.value}</span>
           </div>
           {timerEndsAt > 0 && remainingMs !== null && (
-            <div className={`clue-timer ${timeUp ? 'time-up' : ''} ${!timeUp && remainingMs < 5000 ? 'urgent' : ''}`}>
-              {timeUp ? "TIME'S UP" : Math.ceil(remainingMs / 1000)}
+            <div className={`clue-timer-pill ${timeUp ? 'time-up' : ''} ${!timeUp && remainingMs < 5000 ? 'urgent' : ''}`}>
+              <span className="timer-icon">⏱</span>
+              <span className="timer-text">
+                {timeUp ? "TIME'S UP" : Math.ceil(remainingMs / 1000)}
+              </span>
             </div>
           )}
         </div>
 
-        <div className="clue-content">{clueContent}</div>
+        <div className="clue-content">
+          <MediaContent kind={active.kind} content={active.content} />
+        </div>
 
         {/* Buzz list for players, judge bar for host */}
         <div className="clue-bottom">

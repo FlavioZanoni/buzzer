@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import MediaContent from './MediaContent';
 
 // Detect content type
 function detectKind(content) {
@@ -33,6 +34,14 @@ function detectKind(content) {
   return 'text';
 }
 
+const KIND_ICONS = {
+  empty: '∅',
+  text: '📝',
+  image: '🖼️',
+  audio: '🔊',
+  youtube: '▶️',
+};
+
 export default function Editor({
   game,
   persistedName,
@@ -45,6 +54,8 @@ export default function Editor({
   const [loading, setLoading] = useState(true);
   const saveTimerRef = useRef(null);
   const fileInputRef = useRef(null);
+  const clueFileInputRef = useRef(null);
+  const answerFileInputRef = useRef(null);
 
   // Load full board on mount
   useEffect(() => {
@@ -72,10 +83,18 @@ export default function Editor({
     triggerSave(updated);
   };
 
-  const handleCellChange = (catIdx, rowIdx, newContent) => {
+  const handleClueChange = (catIdx, rowIdx, newContent) => {
     const updated = [...categories];
     updated[catIdx].clues[rowIdx].content = newContent;
     updated[catIdx].clues[rowIdx].kind = detectKind(newContent);
+    setCategories(updated);
+    triggerSave(updated);
+  };
+
+  const handleAnswerChange = (catIdx, rowIdx, newContent) => {
+    const updated = [...categories];
+    updated[catIdx].clues[rowIdx].answer = newContent;
+    updated[catIdx].clues[rowIdx].answerKind = detectKind(newContent);
     setCategories(updated);
     triggerSave(updated);
   };
@@ -100,6 +119,8 @@ export default function Editor({
             clues: cat.clues.map((clue) => ({
               kind: clue.kind,
               content: clue.content,
+              answerKind: clue.answerKind || 'empty',
+              answer: clue.answer || '',
             })),
           })),
         }),
@@ -111,7 +132,7 @@ export default function Editor({
     }
   };
 
-  const uploadImage = async (file, catIdx, rowIdx) => {
+  const uploadImage = async (file, catIdx, rowIdx, isAnswer = false) => {
     // Client-side size check
     if (file.size > 5 * 1024 * 1024) {
       alert('Image too large (max 5MB)');
@@ -135,7 +156,11 @@ export default function Editor({
       }
 
       const json = await response.json();
-      handleCellChange(catIdx, rowIdx, json.url);
+      if (isAnswer) {
+        handleAnswerChange(catIdx, rowIdx, json.url);
+      } else {
+        handleClueChange(catIdx, rowIdx, json.url);
+      }
     } catch (err) {
       console.error('Upload error:', err);
       alert('Image upload failed');
@@ -159,6 +184,8 @@ export default function Editor({
             value: 200 * (r + 1),
             kind: 'empty',
             content: '',
+            answerKind: 'empty',
+            answer: '',
             used: false,
           })),
         });
@@ -174,6 +201,8 @@ export default function Editor({
             value: 200 * (rowCount + 1),
             kind: 'empty',
             content: '',
+            answerKind: 'empty',
+            answer: '',
             used: false,
           });
         } else {
@@ -186,38 +215,48 @@ export default function Editor({
     triggerSave(updated);
   };
 
-  const handlePaste = async (catIdx, rowIdx, e) => {
+  const handlePaste = async (catIdx, rowIdx, e, isAnswer = false) => {
     const items = e.clipboardData?.items || [];
     for (const item of items) {
       if (item.type.startsWith('image/')) {
         const file = item.getAsFile();
         e.preventDefault();
-        uploadImage(file, catIdx, rowIdx);
+        uploadImage(file, catIdx, rowIdx, isAnswer);
         return;
       }
     }
   };
 
-  const handleFileInputChange = async (e) => {
+  const handleFileInputChange = async (e, isAnswer = false) => {
     if (!selectedCell) return;
 
     const file = e.target.files?.[0];
     if (file) {
-      uploadImage(file, selectedCell.cat, selectedCell.row);
+      uploadImage(file, selectedCell.cat, selectedCell.row, isAnswer);
       // Reset input so same file can be selected again
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
+      if (isAnswer && answerFileInputRef.current) {
+        answerFileInputRef.current.value = '';
+      } else if (clueFileInputRef.current) {
+        clueFileInputRef.current.value = '';
       }
     }
   };
 
-  const triggerFileInput = () => {
-    fileInputRef.current?.click();
+  const triggerClueFileInput = () => {
+    clueFileInputRef.current?.click();
+  };
+
+  const triggerAnswerFileInput = () => {
+    answerFileInputRef.current?.click();
   };
 
   if (loading) {
     return <div className="container entry-screen"><div>Loading board...</div></div>;
   }
+
+  const clue = selectedCell
+    ? categories[selectedCell.cat].clues[selectedCell.row]
+    : null;
 
   return (
     <div className="container editor-screen">
@@ -231,7 +270,7 @@ export default function Editor({
           <button onClick={() => changeShape('rows', -1)}>−</button>
           <button onClick={() => changeShape('rows', 1)}>+</button>
         </div>
-        {saved && <div className="saved-indicator">Saved</div>}
+        {saved && <div className="saved-indicator">✓ Saved</div>}
       </div>
 
       <div className="editor-content">
@@ -258,91 +297,208 @@ export default function Editor({
               style={{ gridTemplateColumns: `repeat(${categories.length}, minmax(0, 1fr))` }}
             >
               {categories.map((cat, catIdx) => {
-                const clue = cat.clues[rowIdx];
+                const cellClue = cat.clues[rowIdx];
                 const isSelected =
                   selectedCell?.cat === catIdx &&
                   selectedCell?.row === rowIdx;
-                const preview = clue.content
-                  .substring(0, 20)
-                  .replace(/\n/g, ' ');
+                const isFilled = cellClue.kind !== 'empty';
+                const hasAnswer = cellClue.answerKind && cellClue.answerKind !== 'empty';
 
                 return (
                   <button
                     key={`${catIdx}-${rowIdx}`}
-                    className={`editor-cell ${isSelected ? 'selected' : ''} ${clue.content ? 'filled' : ''}`}
+                    className={`editor-cell ${isSelected ? 'selected' : ''} ${isFilled ? 'filled' : ''}`}
                     onClick={() =>
                       setSelectedCell({ cat: catIdx, row: rowIdx })
                     }
                   >
-                    {clue.content && (
-                      <span className="cell-preview">{preview}</span>
-                    )}
-                    <span className="cell-kind">{clue.kind}</span>
+                    <div className="cell-top">
+                      <span className="cell-value">${cellClue.value}</span>
+                      {hasAnswer && <span className="answer-badge">A</span>}
+                    </div>
+                    <span className="cell-kind-icon">{KIND_ICONS[cellClue.kind] || '?'}</span>
+                    {!isFilled && <span className="cell-unfilled">+</span>}
                   </button>
                 );
               })}
             </div>
           ))}
         </div>
+      </div>
 
-        {/* Cell edit panel */}
-        {selectedCell && (
-          <div className="editor-edit-panel">
-            <div className="edit-panel-header">
-              <span>
-                Edit {categories[selectedCell.cat].name} - $
-                {categories[selectedCell.cat].clues[selectedCell.row].value}
-              </span>
+      {/* Cell edit modal */}
+      {selectedCell && clue && (
+        <div className="editor-modal-overlay" onClick={() => setSelectedCell(null)}>
+          <div
+            className="editor-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <div className="modal-title">
+                {categories[selectedCell.cat].name} - $
+                {clue.value}
+              </div>
               <button
-                className="close-btn"
+                className="modal-close-btn"
                 onClick={() => setSelectedCell(null)}
               >
                 ✕
               </button>
             </div>
-            <textarea
-              value={
-                categories[selectedCell.cat].clues[selectedCell.row].content
-              }
-              onChange={(e) =>
-                handleCellChange(
-                  selectedCell.cat,
-                  selectedCell.row,
-                  e.target.value
-                )
-              }
-              onPaste={(e) =>
-                handlePaste(selectedCell.cat, selectedCell.row, e)
-              }
-              placeholder="Enter clue content (text, URL for image/audio, or YouTube URL)"
-              className="edit-textarea"
-            />
-            <div className="edit-panel-footer">
-              <span className="kind-label">
-                Type:{' '}
-                {detectKind(
-                  categories[selectedCell.cat].clues[selectedCell.row]
-                    .content
-                )}
-              </span>
-              <button className="upload-btn" onClick={triggerFileInput}>
-                Upload image
+
+            {/* CLUE Section */}
+            <div className="modal-section">
+              <div className="section-header">
+                <h3>CLUE</h3>
+                <span className="section-hint">shown to everyone</span>
+              </div>
+
+              <div className="content-input-group">
+                <textarea
+                  value={clue.content}
+                  onChange={(e) =>
+                    handleClueChange(
+                      selectedCell.cat,
+                      selectedCell.row,
+                      e.target.value
+                    )
+                  }
+                  onPaste={(e) =>
+                    handlePaste(selectedCell.cat, selectedCell.row, e, false)
+                  }
+                  placeholder="Enter clue text, image URL, audio URL, or YouTube link"
+                  className="content-textarea"
+                />
+              </div>
+
+              <div className="kind-chips">
+                {['TEXT', 'IMAGE', 'AUDIO', 'YOUTUBE'].map((kindLabel) => {
+                  const kindLower = kindLabel.toLowerCase();
+                  const isActive = clue.kind === kindLower;
+                  return (
+                    <div
+                      key={kindLabel}
+                      className={`kind-chip ${isActive ? 'active' : ''}`}
+                    >
+                      <span className="chip-icon">{KIND_ICONS[kindLower]}</span>
+                      <span className="chip-text">{kindLabel}</span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="upload-actions">
+                <button
+                  className="btn btn-secondary"
+                  onClick={triggerClueFileInput}
+                >
+                  📤 Upload Image
+                </button>
+                <input
+                  ref={clueFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleFileInputChange(e, false)}
+                  style={{ display: 'none' }}
+                />
+              </div>
+
+              <div className="hint-line">
+                💡 Paste text, an image (Ctrl+V or upload), an image/audio URL (.png .jpg .mp3 .ogg…), or a YouTube link
+              </div>
+
+              {clue.kind !== 'empty' && (
+                <div className="preview-section">
+                  <div className="preview-label">Preview</div>
+                  <MediaContent kind={clue.kind} content={clue.content} />
+                </div>
+              )}
+            </div>
+
+            {/* ANSWER Section */}
+            <div className="modal-section">
+              <div className="section-header">
+                <h3>ANSWER</h3>
+                <span className="section-hint">shown after judging</span>
+              </div>
+
+              <div className="content-input-group">
+                <textarea
+                  value={clue.answer || ''}
+                  onChange={(e) =>
+                    handleAnswerChange(
+                      selectedCell.cat,
+                      selectedCell.row,
+                      e.target.value
+                    )
+                  }
+                  onPaste={(e) =>
+                    handlePaste(selectedCell.cat, selectedCell.row, e, true)
+                  }
+                  placeholder="Enter answer text, image URL, audio URL, or YouTube link"
+                  className="content-textarea"
+                />
+              </div>
+
+              <div className="kind-chips">
+                {['TEXT', 'IMAGE', 'AUDIO', 'YOUTUBE'].map((kindLabel) => {
+                  const kindLower = kindLabel.toLowerCase();
+                  const isActive = (clue.answerKind || 'empty') === kindLower;
+                  return (
+                    <div
+                      key={`answer-${kindLabel}`}
+                      className={`kind-chip ${isActive ? 'active' : ''}`}
+                    >
+                      <span className="chip-icon">{KIND_ICONS[kindLower]}</span>
+                      <span className="chip-text">{kindLabel}</span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="upload-actions">
+                <button
+                  className="btn btn-secondary"
+                  onClick={triggerAnswerFileInput}
+                >
+                  📤 Upload Image
+                </button>
+                <input
+                  ref={answerFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleFileInputChange(e, true)}
+                  style={{ display: 'none' }}
+                />
+              </div>
+
+              <div className="hint-line">
+                💡 Paste text, an image (Ctrl+V or upload), an image/audio URL (.png .jpg .mp3 .ogg…), or a YouTube link
+              </div>
+
+              {(clue.answerKind || 'empty') !== 'empty' && (
+                <div className="preview-section">
+                  <div className="preview-label">Preview</div>
+                  <MediaContent kind={clue.answerKind || 'empty'} content={clue.answer || ''} />
+                </div>
+              )}
+            </div>
+
+            <div className="modal-footer">
+              <button
+                className="btn btn-primary"
+                onClick={() => setSelectedCell(null)}
+              >
+                Done
               </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleFileInputChange}
-                style={{ display: 'none' }}
-              />
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="editor-footer">
-        <button className="done-btn" onClick={onDone}>
-          Done
+        <button className="btn btn-primary" onClick={onDone}>
+          CLOSE EDITOR
         </button>
       </div>
     </div>

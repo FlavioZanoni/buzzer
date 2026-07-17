@@ -88,23 +88,28 @@ export async function POST(request) {
       );
     }
 
+    const KINDS = ['empty', 'text', 'image', 'audio', 'youtube'];
     for (const clue of cat.clues) {
-      if (
-        !clue.kind ||
-        !['empty', 'text', 'image', 'audio', 'youtube'].includes(clue.kind)
-      ) {
+      if (!clue.kind || !KINDS.includes(clue.kind)) {
         return Response.json(
           { error: 'Invalid clue kind' },
           { status: 400 }
         );
       }
-
-      const content = clue.content || '';
-      if (typeof content !== 'string' || content.length > 2_000_000) {
+      if (clue.answerKind && !KINDS.includes(clue.answerKind)) {
         return Response.json(
-          { error: 'Clue content must be a string <= 2,000,000 chars' },
+          { error: 'Invalid answer kind' },
           { status: 400 }
         );
+      }
+
+      for (const field of [clue.content || '', clue.answer || '']) {
+        if (typeof field !== 'string' || field.length > 2_000_000) {
+          return Response.json(
+            { error: 'Clue content must be a string <= 2,000,000 chars' },
+            { status: 400 }
+          );
+        }
       }
     }
   }

@@ -1,4 +1,4 @@
-import { initState, getRoom, judgeAnswer, broadcastToRoom, publicGame, persistRoom } from '@/lib/state';
+import { initState, getRoom, judgeAnswer, clearReveal, broadcastToRoom, publicGame, persistRoom } from '@/lib/state';
 
 export async function POST(request) {
   initState();
@@ -15,7 +15,7 @@ export async function POST(request) {
     return Response.json({ error: 'Invalid name' }, { status: 400 });
   }
 
-  if (!verdict || !['correct', 'wrong', 'skip'].includes(verdict)) {
+  if (!verdict || !['correct', 'wrong', 'skip', 'continue'].includes(verdict)) {
     return Response.json({ error: 'Invalid verdict' }, { status: 400 });
   }
 
@@ -27,6 +27,14 @@ export async function POST(request) {
   const trimmedName = name.trim();
   if (room.owner !== trimmedName) {
     return Response.json({ error: 'Not owner' }, { status: 403 });
+  }
+
+  // 'continue' just dismisses the answer-reveal screen (no active clue then)
+  if (verdict === 'continue') {
+    clearReveal(room);
+    broadcastToRoom(room, { type: 'game', game: publicGame(room.game) });
+    persistRoom(room.code, room);
+    return Response.json({ ok: true });
   }
 
   if (!room.game?.active) {
