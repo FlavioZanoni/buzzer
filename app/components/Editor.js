@@ -15,9 +15,10 @@ function detectKind(content) {
     return 'youtube';
   }
 
-  // Image data URL or image URL
+  // Image data URL, image URL, or uploaded image
   if (
     content.startsWith('data:image') ||
+    content.startsWith('/api/image/') ||
     /\.(png|jpg|jpeg|gif|webp)(\?.*)?$/i.test(content)
   ) {
     return 'image';
@@ -43,6 +44,7 @@ export default function Editor({
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
   const saveTimerRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // Load full board on mount
   useEffect(() => {
@@ -109,25 +111,64 @@ export default function Editor({
     }
   };
 
-  const handlePaste = (catIdx, rowIdx, e) => {
+  const uploadImage = async (file, catIdx, rowIdx) => {
+    // Client-side size check
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image too large (max 5MB)');
+      return;
+    }
+
+    // Upload the image
+    try {
+      const response = await fetch(
+        `/api/image?room=${persistedRoom}&name=${encodeURIComponent(persistedName)}`,
+        {
+          method: 'POST',
+          headers: { 'content-type': file.type },
+          body: file,
+        }
+      );
+
+      if (!response.ok) {
+        alert('Image upload failed');
+        return;
+      }
+
+      const json = await response.json();
+      handleCellChange(catIdx, rowIdx, json.url);
+    } catch (err) {
+      console.error('Upload error:', err);
+      alert('Image upload failed');
+    }
+  };
+
+  const handlePaste = async (catIdx, rowIdx, e) => {
     const items = e.clipboardData?.items || [];
     for (const item of items) {
       if (item.type.startsWith('image/')) {
         const file = item.getAsFile();
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-          const dataUrl = ev.target.result;
-          if (dataUrl.length > 1500000) {
-            alert('Image too big, use a URL');
-            return;
-          }
-          handleCellChange(catIdx, rowIdx, dataUrl);
-        };
-        reader.readAsDataURL(file);
         e.preventDefault();
+        uploadImage(file, catIdx, rowIdx);
         return;
       }
     }
+  };
+
+  const handleFileInputChange = async (e) => {
+    if (!selectedCell) return;
+
+    const file = e.target.files?.[0];
+    if (file) {
+      uploadImage(file, selectedCell.cat, selectedCell.row);
+      // Reset input so same file can be selected again
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const triggerFileInput = () => {
+    fileInputRef.current?.click();
   };
 
   if (loading) {
@@ -228,6 +269,16 @@ export default function Editor({
                     .content
                 )}
               </span>
+              <button className="upload-btn" onClick={triggerFileInput}>
+                Upload image
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileInputChange}
+                style={{ display: 'none' }}
+              />
             </div>
           </div>
         )}
