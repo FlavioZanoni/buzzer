@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import confetti from 'canvas-confetti';
 import Grid from './components/Grid';
 import Scoreboard from './components/Scoreboard';
 import ClueOverlay from './components/ClueOverlay';
@@ -87,6 +88,8 @@ export default function Page() {
   const [game, setGame] = useState(null);
   const [showEditor, setShowEditor] = useState(false);
   const [timerEndsAt, setTimerEndsAt] = useState(0);
+  const [celebration, setCelebration] = useState(null); // {winners, score}
+  const prevOverRef = useRef(null);
   const prevLenRef = useRef(0);
   const offsetRef = useRef(0); // serverTime ≈ Date.now() + offset
   const revealTimerRef = useRef(null);
@@ -218,6 +221,50 @@ export default function Page() {
       es.close();
     };
   }, [persistedName, persistedRoom]);
+
+  // Game over = every filled cell used → crown the leader with confetti.
+  // Only fires on the transition, not when (re)joining an already-finished game.
+  useEffect(() => {
+    if (!game) return;
+    const filled = game.categories
+      .flatMap((c) => c.clues)
+      .filter((cl) => cl.filled);
+    const over =
+      filled.length > 0 && filled.every((cl) => cl.used) && !game.active;
+
+    if (prevOverRef.current === null) {
+      prevOverRef.current = over;
+      return;
+    }
+    if (over && !prevOverRef.current) {
+      const entries = Object.entries(game.scores || {});
+      if (entries.length > 0) {
+        const top = Math.max(...entries.map(([, s]) => s));
+        const winners = entries.filter(([, s]) => s === top).map(([n]) => n);
+        setCelebration({ winners, score: top });
+
+        const isWinner = winners.includes(persistedName);
+        const end = Date.now() + (isWinner ? 6000 : 3000);
+        const burst = () => {
+          confetti({
+            particleCount: isWinner ? 8 : 3,
+            angle: 60,
+            spread: 60,
+            origin: { x: 0, y: 0.7 },
+          });
+          confetti({
+            particleCount: isWinner ? 8 : 3,
+            angle: 120,
+            spread: 60,
+            origin: { x: 1, y: 0.7 },
+          });
+          if (Date.now() < end) requestAnimationFrame(burst);
+        };
+        burst();
+      }
+    }
+    prevOverRef.current = over;
+  }, [game, persistedName]);
 
   const handleNameAndRoomSubmit = (e) => {
     e.preventDefault();
@@ -393,6 +440,18 @@ export default function Page() {
   // Normal game screen with board and scoreboard
   return (
     <div className={`container game-screen ${flash ? 'flash' : ''}`}>
+      {celebration && (
+        <div className="winner-banner" onClick={() => setCelebration(null)}>
+          <div className="winner-trophy">🏆</div>
+          <div className="winner-names">{celebration.winners.join(' & ')}</div>
+          <div className="winner-score">
+            {celebration.score < 0
+              ? `−$${Math.abs(celebration.score)}`
+              : `$${celebration.score}`}
+          </div>
+          <div className="winner-hint">tap to dismiss</div>
+        </div>
+      )}
       <div className="game-header">
         <h1>JEOPARDY!</h1>
         <div className="room-badge">
