@@ -1600,3 +1600,28 @@ h1 {
   font-size: 18px;
   letter-spacing: 1px;
 }
+
+.shape-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.shape-controls button {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #FFCC00;
+  border-radius: 4px;
+  background: rgba(255, 204, 0, 0.15);
+  color: #FFCC00;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.shape-controls button:hover {
+  background: rgba(255, 204, 0, 0.35);
+}

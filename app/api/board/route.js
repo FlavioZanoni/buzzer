@@ -56,12 +56,21 @@ export async function POST(request) {
     return Response.json({ error: 'Not owner' }, { status: 403 });
   }
 
-  // Validate categories
-  if (!Array.isArray(categories) || categories.length !== 6) {
+  // Validate categories: 1-10 columns, 1-10 uniform rows
+  if (
+    !Array.isArray(categories) ||
+    categories.length < 1 ||
+    categories.length > 10
+  ) {
     return Response.json(
-      { error: 'Must have exactly 6 categories' },
+      { error: 'Must have 1-10 categories' },
       { status: 400 }
     );
+  }
+
+  const rows = categories[0]?.clues?.length;
+  if (!Number.isInteger(rows) || rows < 1 || rows > 10) {
+    return Response.json({ error: 'Must have 1-10 rows' }, { status: 400 });
   }
 
   for (const cat of categories) {
@@ -72,9 +81,9 @@ export async function POST(request) {
       );
     }
 
-    if (!Array.isArray(cat.clues) || cat.clues.length !== 5) {
+    if (!Array.isArray(cat.clues) || cat.clues.length !== rows) {
       return Response.json(
-        { error: 'Each category must have exactly 5 clues' },
+        { error: 'All categories must have the same number of clues' },
         { status: 400 }
       );
     }

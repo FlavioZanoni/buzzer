@@ -30,7 +30,7 @@ export async function POST(request) {
     return Response.json({ error: 'Invalid cat or row' }, { status: 400 });
   }
 
-  if (cat < 0 || cat >= 6 || row < 0 || row >= 5) {
+  if (cat < 0 || row < 0) {
     return Response.json({ error: 'Cat/row out of range' }, { status: 400 });
   }
 

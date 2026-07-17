@@ -142,6 +142,50 @@ export default function Editor({
     }
   };
 
+  const rowCount = categories[0]?.clues.length || 0;
+
+  const changeShape = (which, delta) => {
+    const updated = categories.map((c) => ({
+      ...c,
+      clues: [...c.clues],
+    }));
+    if (which === 'cols') {
+      const n = updated.length + delta;
+      if (n < 1 || n > 10) return;
+      if (delta > 0) {
+        updated.push({
+          name: '',
+          clues: Array.from({ length: rowCount }, (_, r) => ({
+            value: 200 * (r + 1),
+            kind: 'empty',
+            content: '',
+            used: false,
+          })),
+        });
+      } else {
+        updated.pop();
+      }
+    } else {
+      const n = rowCount + delta;
+      if (n < 1 || n > 10) return;
+      updated.forEach((c) => {
+        if (delta > 0) {
+          c.clues.push({
+            value: 200 * (rowCount + 1),
+            kind: 'empty',
+            content: '',
+            used: false,
+          });
+        } else {
+          c.clues.pop();
+        }
+      });
+    }
+    setSelectedCell(null);
+    setCategories(updated);
+    triggerSave(updated);
+  };
+
   const handlePaste = async (catIdx, rowIdx, e) => {
     const items = e.clipboardData?.items || [];
     for (const item of items) {
@@ -179,6 +223,14 @@ export default function Editor({
     <div className="container editor-screen">
       <div className="editor-header">
         <h1>EDIT BOARD</h1>
+        <div className="shape-controls">
+          <span>Categories: {categories.length}</span>
+          <button onClick={() => changeShape('cols', -1)}>−</button>
+          <button onClick={() => changeShape('cols', 1)}>+</button>
+          <span>Rows: {rowCount}</span>
+          <button onClick={() => changeShape('rows', -1)}>−</button>
+          <button onClick={() => changeShape('rows', 1)}>+</button>
+        </div>
         {saved && <div className="saved-indicator">Saved</div>}
       </div>
 
@@ -199,8 +251,12 @@ export default function Editor({
 
         {/* Grid of cells */}
         <div className="editor-grid">
-          {[0, 1, 2, 3, 4].map((rowIdx) => (
-            <div key={rowIdx} className="editor-row">
+          {Array.from({ length: rowCount }, (_, rowIdx) => (
+            <div
+              key={rowIdx}
+              className="editor-row"
+              style={{ gridTemplateColumns: `repeat(${categories.length}, 1fr)` }}
+            >
               {categories.map((cat, catIdx) => {
                 const clue = cat.clues[rowIdx];
                 const isSelected =

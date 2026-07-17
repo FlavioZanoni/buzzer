@@ -28,10 +28,12 @@ export default function Grid({ game, isOwner, persistedName, persistedRoom }) {
   }
 
   const categories = game.categories;
+  const rowCount = categories[0]?.clues.length || 0;
+  const cols = { gridTemplateColumns: `repeat(${categories.length}, 1fr)` };
 
   return (
     <div className="grid">
-      <div className="grid-header">
+      <div className="grid-header" style={cols}>
         {categories.map((cat, idx) => (
           <div key={idx} className="category-header">
             {cat.name}
@@ -39,8 +41,8 @@ export default function Grid({ game, isOwner, persistedName, persistedRoom }) {
         ))}
       </div>
       <div className="grid-body">
-        {[0, 1, 2, 3, 4].map((rowIdx) => (
-          <div key={rowIdx} className="grid-row">
+        {Array.from({ length: rowCount }, (_, rowIdx) => (
+          <div key={rowIdx} className="grid-row" style={cols}>
             {categories.map((cat, catIdx) => {
               const clue = cat.clues[rowIdx];
               const isFilled = clue.kind !== 'empty';
