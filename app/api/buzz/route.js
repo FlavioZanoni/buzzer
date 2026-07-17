@@ -16,11 +16,26 @@ export async function POST(request) {
     return Response.json({ error: 'Room not found' }, { status: 404 });
   }
 
+  const trimmedName = name.trim();
+
+  // New validations
+  if (!room.game?.active) {
+    return Response.json({ error: 'no-clue' }, { status: 409 });
+  }
+
+  if (trimmedName === room.owner) {
+    return Response.json({ error: 'host-cannot-buzz' }, { status: 403 });
+  }
+
+  if (room.game.active.attempted.includes(trimmedName)) {
+    return Response.json({ error: 'already-attempted' }, { status: 409 });
+  }
+
   if (room.locked || Date.now() < (room.unlockAt || 0)) {
     return Response.json({ error: 'locked' }, { status: 409 });
   }
 
-  const added = addBuzz(room, name.trim(), pressedAt);
+  const added = addBuzz(room, trimmedName, pressedAt);
 
   if (added) {
     const buzzes = getBuzzes(room);

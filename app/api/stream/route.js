@@ -6,6 +6,9 @@ import {
   getBuzzes,
   getPresentUsers,
   broadcastToRoom,
+  publicGame,
+  ensurePlayerScore,
+  persistRoom,
 } from '@/lib/state';
 
 export const dynamic = 'force-dynamic';
@@ -41,6 +44,13 @@ export async function GET(request) {
       // Register this client
       registerClient(room, controller, trimmedName);
 
+      // Ensure non-owner has a score entry
+      const isNonOwner = trimmedName !== room.owner;
+      if (isNonOwner) {
+        ensurePlayerScore(room, trimmedName);
+        persistRoom(room.code, room);
+      }
+
       // Send current state immediately
       const buzzes = getBuzzes(room);
       const users = getPresentUsers(room);
@@ -57,10 +67,11 @@ export async function GET(request) {
           name: u.name,
           isOwner: u.isOwner,
         })),
+        game: publicGame(room.game),
       };
       controller.enqueue(`data: ${JSON.stringify(event)}\n\n`);
 
-      // Broadcast presence
+      // Broadcast presence and game if this is a non-owner join
       const presenceEvent = {
         type: 'presence',
         users: users.map((u) => ({
@@ -69,6 +80,15 @@ export async function GET(request) {
         })),
       };
       broadcastToRoom(room, presenceEvent);
+
+      // Broadcast game event for non-owner joins so scoreboard updates
+      if (isNonOwner) {
+        const gameEvent = {
+          type: 'game',
+          game: publicGame(room.game),
+        };
+        broadcastToRoom(room, gameEvent);
+      }
     },
 
     cancel() {

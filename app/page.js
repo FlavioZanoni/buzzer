@@ -1,6 +1,10 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Grid from './components/Grid';
+import Scoreboard from './components/Scoreboard';
+import ClueOverlay from './components/ClueOverlay';
+import Editor from './components/Editor';
 
 const playAirhorn = async () => {
   try {
@@ -80,6 +84,8 @@ export default function Page() {
   const [owner, setOwner] = useState('');
   const [users, setUsers] = useState([]);
   const [copied, setCopied] = useState(false);
+  const [game, setGame] = useState(null);
+  const [showEditor, setShowEditor] = useState(false);
   const prevLenRef = useRef(0);
   const offsetRef = useRef(0); // serverTime ≈ Date.now() + offset
   const revealTimerRef = useRef(null);
@@ -176,7 +182,12 @@ export default function Page() {
         applyLock(data.locked, data.unlockAt);
         setOwner(data.owner);
         setUsers(data.users || []);
+        if (data.game) {
+          setGame(data.game);
+        }
         prevLenRef.current = data.buzzes.length;
+      } else if (data.type === 'game') {
+        setGame(data.game);
       } else if (data.type === 'buzz') {
         setBuzzes(data.buzzes);
         if (data.buzzes.length > prevLenRef.current) {
@@ -248,7 +259,9 @@ export default function Page() {
   };
 
   const handleBuzz = async () => {
-    if (!persistedName || !persistedRoom || locked) return;
+    if (!persistedName || !persistedRoom || locked || !game?.active) return;
+    const isAttempted = game.active.attempted?.includes(persistedName);
+    if (isAttempted) return;
     await fetch('/api/buzz', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -289,24 +302,24 @@ export default function Page() {
   // Spacebar listener
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Ignore if typing in input field or if it's a key repeat
-      if (
-        nameInputRef.current === document.activeElement ||
-        roomInputRef.current === document.activeElement ||
-        e.repeat
-      ) {
+      // Ignore if typing in any input/textarea or if it's a key repeat
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || e.repeat) {
         return;
       }
 
-      if (e.code === 'Space' && persistedName && persistedRoom && !locked) {
-        e.preventDefault();
-        handleBuzz();
+      if (e.code === 'Space' && persistedName && persistedRoom && !locked && game?.active) {
+        const isAttempted = game.active.attempted?.includes(persistedName);
+        if (!isAttempted) {
+          e.preventDefault();
+          handleBuzz();
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [persistedName, persistedRoom, locked]);
+  }, [persistedName, persistedRoom, locked, game]);
 
   // Screen 1: Name and room entry
   if (!persistedName || !persistedRoom) {
@@ -339,12 +352,44 @@ export default function Page() {
     );
   }
 
-  // Screen 2: Buzz screen
+  // Screen 2: Game screen
   const isOwner = owner === persistedName;
+
+  // If editor is open, show it
+  if (showEditor && isOwner) {
+    return (
+      <Editor
+        game={game}
+        persistedName={persistedName}
+        persistedRoom={persistedRoom}
+        onDone={() => setShowEditor(false)}
+      />
+    );
+  }
+
+  // If a clue is active, show overlay
+  if (game?.active) {
+    return (
+      <ClueOverlay
+        game={game}
+        buzzes={buzzes}
+        locked={locked}
+        persistedName={persistedName}
+        persistedRoom={persistedRoom}
+        owner={owner}
+        flash={flash}
+        onBuzz={handleBuzz}
+        onLock={handleLock}
+        offsetRef={offsetRef}
+      />
+    );
+  }
+
+  // Normal game screen with board and scoreboard
   return (
-    <div className={`container buzz-screen ${flash ? 'flash' : ''}`}>
-      <div className="buzz-header">
-        <h1>BUZZER</h1>
+    <div className={`container game-screen ${flash ? 'flash' : ''}`}>
+      <div className="game-header">
+        <h1>JEOPARDY!</h1>
         <div className="room-badge">
           ROOM {persistedRoom}
           <button className="copy-btn" onClick={handleCopyLink}>
@@ -353,63 +398,29 @@ export default function Page() {
         </div>
       </div>
 
-      <button
-        className={`buzz-btn ${locked ? 'locked' : ''}`}
-        onClick={handleBuzz}
-        disabled={locked}
-      >
-        <span className="buzz-text">{locked ? 'LOCKED' : 'BUZZ'}</span>
-        <span className="buzz-hint">or press SPACE</span>
-      </button>
-
-      <div className="main-content">
-        <div className="buzzer-list">
-          {buzzes.length === 0 ? (
-            <div className="empty-state">Waiting for buzzers...</div>
-          ) : (
-            buzzes.map((buzz, idx) => (
-              <div
-                key={`${buzz.name}-${idx}`}
-                className={`buzz-row ${idx === 0 ? 'first-place' : ''} ${
-                  buzz.name === persistedName ? 'is-you' : ''
-                }`}
-              >
-                <span className="rank">{idx + 1}</span>
-                <span className="buzz-name">{buzz.name}</span>
-                {idx > 0 && (
-                  <span className="delta">+{buzz.delta}ms</span>
-                )}
-                {idx === 0 && buzz.name === persistedName && (
-                  <span className="you-badge">You're first!</span>
-                )}
-              </div>
-            ))
-          )}
+      <div className="game-main">
+        <div className="grid-container">
+          {game && <Grid game={game} isOwner={isOwner} persistedName={persistedName} persistedRoom={persistedRoom} />}
         </div>
-
-        <div className="sidebar">
-          <div className="presence-panel">
-            <div className="presence-title">Players</div>
-            <div className="presence-list">
-              {users.map((user) => (
-                <div
-                  key={user.name}
-                  className={`presence-item ${user.isOwner ? 'is-owner' : ''} ${
-                    user.name === persistedName ? 'is-you' : ''
-                  }`}
-                >
-                  {user.isOwner && <span className="host-tag">HOST</span>}
-                  <span className="player-name">{user.name}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+        <div className="scoreboard-container">
+          {game && (
+            <Scoreboard
+              game={game}
+              users={users}
+              owner={owner}
+              persistedName={persistedName}
+              persistedRoom={persistedRoom}
+            />
+          )}
         </div>
       </div>
 
-      <div className="controls">
+      <div className="game-controls">
         {isOwner && (
           <div className="host-bar">
+            <button className="host-btn" onClick={() => setShowEditor(true)}>
+              Edit Board
+            </button>
             <button className="host-btn lock-btn" onClick={handleLock}>
               {locked ? 'UNLOCK' : 'LOCK'}
             </button>
