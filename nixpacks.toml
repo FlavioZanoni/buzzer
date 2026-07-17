@@ -1,0 +1,3 @@
+# node:sqlite (lib/db.js) needs Node >= 24
+[phases.setup]
+nixPkgs = ["nodejs_24"]
