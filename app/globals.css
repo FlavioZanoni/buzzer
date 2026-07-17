@@ -2314,3 +2314,67 @@ h1 {
     font-size: 12px;
   }
 }
+
+.elect-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.elect-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.winner-chip {
+  padding: 8px 14px;
+  border-radius: 20px;
+  border: 2px solid #FFCC00;
+  background: rgba(255, 204, 0, 0.12);
+  color: #FFCC00;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.winner-chip:hover {
+  background: rgba(255, 204, 0, 0.35);
+  transform: translateY(-1px);
+}
+
+.winner-chip.buzzed-first {
+  background: #FFCC00;
+  color: #060CE9;
+}
+
+.winner-chip.skip-chip {
+  border-color: rgba(255, 255, 255, 0.4);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.winner-chip.skip-chip:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.buzzer-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.discuss-hint {
+  padding: 24px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 14px;
+  letter-spacing: 0.5px;
+}

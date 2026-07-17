@@ -23,6 +23,10 @@ export async function POST(request) {
     return Response.json({ error: 'no-clue' }, { status: 409 });
   }
 
+  if (!room.game.buzzerOpen) {
+    return Response.json({ error: 'buzzer-closed' }, { status: 409 });
+  }
+
   if (trimmedName === room.owner) {
     return Response.json({ error: 'host-cannot-buzz' }, { status: 403 });
   }

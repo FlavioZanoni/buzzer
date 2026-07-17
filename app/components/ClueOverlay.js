@@ -105,7 +105,7 @@ export default function ClueOverlay({
     ? Math.max(0, Math.min(100, (remainingMs / initialRemainingMs) * 100))
     : 100;
 
-  const handleJudge = async (verdict) => {
+  const handleJudge = async (verdict, player) => {
     await fetch('/api/judge', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -113,9 +113,24 @@ export default function ClueOverlay({
         room: persistedRoom,
         name: persistedName,
         verdict,
+        player,
       }),
     });
   };
+
+  const buzzerOpen = !!game.buzzerOpen;
+  const toggleBuzzer = async () => {
+    await fetch('/api/buzzer', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        room: persistedRoom,
+        name: persistedName,
+        open: !buzzerOpen,
+      }),
+    });
+  };
+  const players = Object.keys(game.scores || {});
 
   return (
     <div className={`clue-overlay ${flash ? 'flash' : ''}`}>
@@ -146,61 +161,83 @@ export default function ClueOverlay({
         <div className="clue-bottom">
           {isOwner ? (
             <div className="judge-bar">
-              <div className="judge-controls">
+              <div className="elect-row">
+                <span className="elect-label">Winner:</span>
+                {players.map((p) => (
+                  <button
+                    key={p}
+                    className={`winner-chip ${firstBuzzer?.name === p ? 'buzzed-first' : ''}`}
+                    onClick={() => handleJudge('correct', p)}
+                  >
+                    {firstBuzzer?.name === p && <span className="chip-bell">🔔 </span>}
+                    {p}
+                  </button>
+                ))}
                 <button
-                  className="judge-btn lock-btn"
-                  onClick={() => onLock()}
+                  className="winner-chip skip-chip"
+                  onClick={() => handleJudge('skip')}
                 >
-                  {locked ? 'UNLOCK' : 'LOCK'}
+                  SKIP · SHOW ANSWER
                 </button>
-                <div className="timer-btns">
-                  {[5, 10, 15, 30].map((s) => (
-                    <button
-                      key={s}
-                      className="judge-btn timer-btn"
-                      onClick={() => startTimer(s)}
-                    >
-                      {s}s
-                    </button>
-                  ))}
-                  {timerEndsAt > 0 && (
-                    <button
-                      className="judge-btn timer-btn cancel"
-                      onClick={() => startTimer(0)}
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
               </div>
 
-              {firstBuzzer && (
-                <div className="first-buzzer">
-                  <span className="first-label">First: {firstBuzzer.name}</span>
-                  <button
-                    className="judge-btn verdict-correct"
-                    onClick={() => handleJudge('correct')}
-                  >
-                    CORRECT
-                  </button>
-                  <button
-                    className="judge-btn verdict-wrong"
-                    onClick={() => handleJudge('wrong')}
-                  >
-                    WRONG
-                  </button>
+              <div className="buzzer-controls">
+                <button
+                  className={`btn ${buzzerOpen ? 'btn-danger' : 'btn-primary'}`}
+                  onClick={toggleBuzzer}
+                >
+                  {buzzerOpen ? 'CLOSE BUZZER' : 'OPEN BUZZER'}
+                </button>
+                {buzzerOpen && (
+                  <>
+                    <button
+                      className="judge-btn lock-btn"
+                      onClick={() => onLock()}
+                    >
+                      {locked ? 'UNLOCK' : 'LOCK'}
+                    </button>
+                    <div className="timer-btns">
+                      {[5, 10, 15, 30].map((s) => (
+                        <button
+                          key={s}
+                          className="judge-btn timer-btn"
+                          onClick={() => startTimer(s)}
+                        >
+                          {s}s
+                        </button>
+                      ))}
+                      {timerEndsAt > 0 && (
+                        <button
+                          className="judge-btn timer-btn cancel"
+                          onClick={() => startTimer(0)}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {buzzerOpen && buzzes.length > 0 && (
+                <div className="buzz-list">
+                  {buzzes.map((buzz, idx) => (
+                    <div key={`${buzz.name}-${idx}`} className="buzz-list-item">
+                      <span className="rank">{idx + 1}</span>
+                      <span className="name">{buzz.name}</span>
+                    </div>
+                  ))}
                 </div>
               )}
-
-              <button
-                className="judge-btn skip-btn"
-                onClick={() => handleJudge('skip')}
-              >
-                SKIP
-              </button>
             </div>
           ) : (
             <div className="buzz-area">
+              {!buzzerOpen ? (
+                <div className="discuss-hint">
+                  The host is running this round — buzzer appears here when opened
+                </div>
+              ) : (
+              <>
               <button
                 className={`buzz-btn overlay-buzz ${buzzState}`}
                 onClick={onBuzz}
@@ -234,6 +271,8 @@ export default function ClueOverlay({
                     );
                   })}
                 </div>
+              )}
+              </>
               )}
             </div>
           )}

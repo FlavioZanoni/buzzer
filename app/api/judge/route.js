@@ -5,7 +5,7 @@ export async function POST(request) {
 
   const body = await request.json();
   const roomCode = (body.room || '').toUpperCase();
-  const { name, verdict } = body;
+  const { name, verdict, player } = body;
 
   if (!roomCode || !/^[A-Z]{4}$/.test(roomCode)) {
     return Response.json({ error: 'Invalid room code' }, { status: 400 });
@@ -41,8 +41,12 @@ export async function POST(request) {
     return Response.json({ error: 'No active clue' }, { status: 400 });
   }
 
-  // Apply verdict
-  const result = judgeAnswer(room, verdict);
+  // Apply verdict ('correct' may carry an elected player name)
+  const result = judgeAnswer(
+    room,
+    verdict,
+    typeof player === 'string' ? player.trim() : undefined
+  );
   if (!result) {
     return Response.json({ error: 'Judge failed' }, { status: 400 });
   }

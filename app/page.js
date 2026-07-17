@@ -323,7 +323,7 @@ export default function Page() {
   };
 
   const handleBuzz = async () => {
-    if (!persistedName || !persistedRoom || locked || !game?.active) return;
+    if (!persistedName || !persistedRoom || locked || !game?.active || !game?.buzzerOpen) return;
     const isAttempted = game.active.attempted?.includes(persistedName);
     if (isAttempted) return;
     await fetch('/api/buzz', {
@@ -336,18 +336,6 @@ export default function Page() {
       }),
     });
     unlockAudio();
-  };
-
-  const handleReset = async () => {
-    if (!persistedRoom || owner !== persistedName) return;
-    await fetch('/api/reset', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        room: persistedRoom,
-        name: persistedName,
-      }),
-    });
   };
 
   const handleLock = async () => {
@@ -372,7 +360,7 @@ export default function Page() {
         return;
       }
 
-      if (e.code === 'Space' && persistedName && persistedRoom && !locked && game?.active) {
+      if (e.code === 'Space' && persistedName && persistedRoom && !locked && game?.active && game?.buzzerOpen) {
         const isAttempted = game.active.attempted?.includes(persistedName);
         if (!isAttempted) {
           e.preventDefault();
@@ -514,12 +502,6 @@ export default function Page() {
           <div className="host-bar">
             <button className="host-btn" onClick={() => setShowEditor(true)}>
               Edit Board
-            </button>
-            <button className="host-btn lock-btn" onClick={handleLock}>
-              {locked ? 'UNLOCK' : 'LOCK'}
-            </button>
-            <button className="host-btn reset-btn" onClick={handleReset}>
-              Reset Round
             </button>
           </div>
         )}
