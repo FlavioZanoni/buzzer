@@ -86,6 +86,7 @@ export default function Page() {
   const [copied, setCopied] = useState(false);
   const [game, setGame] = useState(null);
   const [showEditor, setShowEditor] = useState(false);
+  const [timerEndsAt, setTimerEndsAt] = useState(0);
   const prevLenRef = useRef(0);
   const offsetRef = useRef(0); // serverTime ≈ Date.now() + offset
   const revealTimerRef = useRef(null);
@@ -199,7 +200,10 @@ export default function Page() {
       } else if (data.type === 'reset') {
         setBuzzes([]);
         applyLock(data.locked, 0);
+        setTimerEndsAt(0);
         prevLenRef.current = 0;
+      } else if (data.type === 'timer') {
+        setTimerEndsAt(data.endsAt || 0);
       } else if (data.type === 'lock') {
         applyLock(data.locked, data.at);
       } else if (data.type === 'presence') {
@@ -381,6 +385,7 @@ export default function Page() {
         onBuzz={handleBuzz}
         onLock={handleLock}
         offsetRef={offsetRef}
+        timerEndsAt={timerEndsAt}
       />
     );
   }

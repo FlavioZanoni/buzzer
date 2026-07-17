@@ -1,6 +1,31 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+
+// Short "time's up" beep via the shared AudioContext
+function playTimeUp() {
+  try {
+    const ctx =
+      window.audioContext ||
+      new (window.AudioContext || window.webkitAudioContext)();
+    window.audioContext = ctx;
+    if (ctx.state === 'suspended') ctx.resume();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(880, now);
+    osc.frequency.exponentialRampToValueAtTime(330, now + 0.35);
+    gain.gain.setValueAtTime(0.12, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.4);
+  } catch (e) {
+    // no audio, no problem
+  }
+}
 
 // Extract YouTube ID from various URL formats
 function extractYouTubeId(content) {
@@ -25,10 +50,44 @@ export default function ClueOverlay({
   onBuzz,
   onLock,
   offsetRef,
+  timerEndsAt,
 }) {
-  const [showDetails, setShowDetails] = useState(false);
+  const [remainingMs, setRemainingMs] = useState(null);
+  const beepedRef = useRef(false);
+
+  // Tick the countdown against the server clock (endsAt is server time)
+  useEffect(() => {
+    if (!timerEndsAt) {
+      setRemainingMs(null);
+      beepedRef.current = false;
+      return;
+    }
+    const tick = () => {
+      const left = Math.max(
+        0,
+        timerEndsAt - (offsetRef?.current || 0) - Date.now()
+      );
+      setRemainingMs(left);
+      if (left === 0 && !beepedRef.current) {
+        beepedRef.current = true;
+        playTimeUp();
+      }
+    };
+    tick();
+    const id = setInterval(tick, 100);
+    return () => clearInterval(id);
+  }, [timerEndsAt, offsetRef]);
 
   if (!game?.active) return null;
+
+  const timeUp = timerEndsAt > 0 && remainingMs === 0;
+  const startTimer = async (seconds) => {
+    await fetch('/api/timer', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ room: persistedRoom, name: persistedName, seconds }),
+    });
+  };
 
   const { active } = game;
   const category = game.categories[active.cat];
@@ -38,12 +97,12 @@ export default function ClueOverlay({
 
   // Determine buzz button state
   let buzzState = 'buzz';
-  if (locked) {
-    buzzState = 'locked';
-  } else if (!active) {
-    buzzState = 'no-clue';
-  } else if (isAttempted) {
+  if (isAttempted) {
     buzzState = 'locked-out';
+  } else if (timeUp) {
+    buzzState = 'time-up';
+  } else if (locked) {
+    buzzState = 'locked';
   }
 
   // Render clue content by kind
@@ -108,6 +167,11 @@ export default function ClueOverlay({
             <span className="category-name">{category.name}</span>
             <span className="clue-value">${active.value}</span>
           </div>
+          {timerEndsAt > 0 && remainingMs !== null && (
+            <div className={`clue-timer ${timeUp ? 'time-up' : ''} ${!timeUp && remainingMs < 5000 ? 'urgent' : ''}`}>
+              {timeUp ? "TIME'S UP" : Math.ceil(remainingMs / 1000)}
+            </div>
+          )}
         </div>
 
         <div className="clue-content">{clueContent}</div>
@@ -123,6 +187,25 @@ export default function ClueOverlay({
                 >
                   {locked ? 'UNLOCK' : 'LOCK'}
                 </button>
+                <div className="timer-btns">
+                  {[5, 10, 15, 30].map((s) => (
+                    <button
+                      key={s}
+                      className="judge-btn timer-btn"
+                      onClick={() => startTimer(s)}
+                    >
+                      {s}s
+                    </button>
+                  ))}
+                  {timerEndsAt > 0 && (
+                    <button
+                      className="judge-btn timer-btn cancel"
+                      onClick={() => startTimer(0)}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
               </div>
 
               {firstBuzzer && (
@@ -155,11 +238,11 @@ export default function ClueOverlay({
               <button
                 className={`buzz-btn overlay-buzz ${buzzState}`}
                 onClick={onBuzz}
-                disabled={buzzState === 'locked' || buzzState === 'locked-out' || buzzState === 'no-clue'}
+                disabled={buzzState !== 'buzz'}
               >
                 <span className="buzz-text">
                   {buzzState === 'locked' && 'LOCKED'}
-                  {buzzState === 'no-clue' && 'NO CLUE'}
+                  {buzzState === 'time-up' && "TIME'S UP"}
                   {buzzState === 'locked-out' && 'LOCKED OUT'}
                   {buzzState === 'buzz' && 'BUZZ'}
                 </span>

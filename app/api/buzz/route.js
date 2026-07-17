@@ -35,6 +35,12 @@ export async function POST(request) {
     return Response.json({ error: 'locked' }, { status: 409 });
   }
 
+  // ponytail: arrival-based deadline check; press-time precision isn't
+  // needed here since the host controls the timer anyway
+  if (room.timerEndsAt && Date.now() > room.timerEndsAt) {
+    return Response.json({ error: 'time-up' }, { status: 409 });
+  }
+
   const added = addBuzz(room, trimmedName, pressedAt);
 
   if (added) {

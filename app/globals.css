@@ -1498,3 +1498,45 @@ h1 {
     width: 100%;
   }
 }
+
+.clue-timer {
+  font-size: 42px;
+  font-weight: 900;
+  color: #FFCC00;
+  min-width: 70px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.clue-timer.urgent {
+  color: #ff5544;
+  animation: timer-pulse 1s infinite;
+}
+
+.clue-timer.time-up {
+  font-size: 26px;
+  color: #ff5544;
+}
+
+@keyframes timer-pulse {
+  50% { opacity: 0.4; }
+}
+
+.timer-btns {
+  display: flex;
+  gap: 6px;
+  margin-left: 10px;
+}
+
+.timer-btn {
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.timer-btn.cancel {
+  background: #ff5544;
+}
+
+.buzz-btn.time-up {
+  filter: grayscale(0.8);
+}
