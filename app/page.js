@@ -60,20 +60,34 @@ const unlockAudio = () => {
   }
 };
 
+const generateRoomCode = () => {
+  let code = '';
+  for (let i = 0; i < 4; i++) {
+    code += String.fromCharCode(65 + Math.floor(Math.random() * 26));
+  }
+  return code;
+};
+
 export default function Page() {
   const [name, setName] = useState('');
+  const [roomCode, setRoomCode] = useState('');
   const [persistedName, setPersistedName] = useState('');
+  const [persistedRoom, setPersistedRoom] = useState('');
   const [buzzes, setBuzzes] = useState([]);
   const [flash, setFlash] = useState(false);
   const [ping, setPing] = useState(null);
+  const [locked, setLocked] = useState(true);
+  const [owner, setOwner] = useState('');
+  const [users, setUsers] = useState([]);
   const prevLenRef = useRef(0);
   const offsetRef = useRef(0); // serverTime ≈ Date.now() + offset
   const nameInputRef = useRef(null);
+  const roomInputRef = useRef(null);
 
   // NTP-style clock sync: 5 samples, keep the lowest-RTT one.
   // Lets the server order buzzes by actual press time instead of arrival.
   useEffect(() => {
-    if (!persistedName) return;
+    if (!persistedName || !persistedRoom) return;
     let stop = false;
     const sync = async () => {
       let best = { rtt: Infinity, offset: 0 };
@@ -101,27 +115,36 @@ export default function Page() {
       stop = true;
       clearInterval(id);
     };
-  }, [persistedName]);
+  }, [persistedName, persistedRoom]);
 
-  // Load persisted name
+  // Load persisted name and room
   useEffect(() => {
-    const stored = localStorage.getItem('buzzer_name');
-    if (stored) {
-      setPersistedName(stored);
+    const storedName = localStorage.getItem('buzzer_name');
+    const storedRoom = localStorage.getItem('buzzer_room');
+    if (storedName) {
+      setPersistedName(storedName);
+    }
+    if (storedRoom) {
+      setPersistedRoom(storedRoom);
     }
   }, []);
 
   // Set up EventSource connection
   useEffect(() => {
-    if (!persistedName) return;
+    if (!persistedName || !persistedRoom) return;
 
-    const es = new EventSource('/api/stream');
+    const es = new EventSource(
+      `/api/stream?room=${persistedRoom}&name=${encodeURIComponent(persistedName)}`
+    );
 
     es.onmessage = (event) => {
       const data = JSON.parse(event.data);
 
       if (data.type === 'init') {
         setBuzzes(data.buzzes);
+        setLocked(data.locked);
+        setOwner(data.owner);
+        setUsers(data.users || []);
         prevLenRef.current = data.buzzes.length;
       } else if (data.type === 'buzz') {
         setBuzzes(data.buzzes);
@@ -133,7 +156,12 @@ export default function Page() {
         prevLenRef.current = data.buzzes.length;
       } else if (data.type === 'reset') {
         setBuzzes([]);
+        setLocked(data.locked);
         prevLenRef.current = 0;
+      } else if (data.type === 'lock') {
+        setLocked(data.locked);
+      } else if (data.type === 'presence') {
+        setUsers(data.users || []);
       }
     };
 
@@ -142,25 +170,40 @@ export default function Page() {
     return () => {
       es.close();
     };
-  }, [persistedName]);
+  }, [persistedName, persistedRoom]);
 
-  const handleNameSubmit = (e) => {
+  const handleNameAndRoomSubmit = (e) => {
     e.preventDefault();
     if (name.trim()) {
       const trimmed = name.trim();
+      const code = roomCode.toUpperCase() || generateRoomCode();
       setPersistedName(trimmed);
+      setPersistedRoom(code);
       localStorage.setItem('buzzer_name', trimmed);
+      localStorage.setItem('buzzer_room', code);
       setName('');
+      setRoomCode('');
       unlockAudio();
     }
   };
 
+  const handleLeaveRoom = () => {
+    setPersistedName('');
+    setPersistedRoom('');
+    localStorage.removeItem('buzzer_room');
+    setUsers([]);
+    setLocked(true);
+    setOwner('');
+    setBuzzes([]);
+  };
+
   const handleBuzz = async () => {
-    if (!persistedName) return;
+    if (!persistedName || !persistedRoom || locked) return;
     await fetch('/api/buzz', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
+        room: persistedRoom,
         name: persistedName,
         pressedAt: Date.now() + offsetRef.current,
       }),
@@ -169,7 +212,28 @@ export default function Page() {
   };
 
   const handleReset = async () => {
-    await fetch('/api/reset', { method: 'POST' });
+    if (!persistedRoom || owner !== persistedName) return;
+    await fetch('/api/reset', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        room: persistedRoom,
+        name: persistedName,
+      }),
+    });
+  };
+
+  const handleLock = async () => {
+    if (!persistedRoom || owner !== persistedName) return;
+    await fetch('/api/lock', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        room: persistedRoom,
+        name: persistedName,
+        locked: !locked,
+      }),
+    });
   };
 
   // Spacebar listener
@@ -178,12 +242,13 @@ export default function Page() {
       // Ignore if typing in input field or if it's a key repeat
       if (
         nameInputRef.current === document.activeElement ||
+        roomInputRef.current === document.activeElement ||
         e.repeat
       ) {
         return;
       }
 
-      if (e.code === 'Space' && persistedName) {
+      if (e.code === 'Space' && persistedName && persistedRoom && !locked) {
         e.preventDefault();
         handleBuzz();
       }
@@ -191,16 +256,16 @@ export default function Page() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [persistedName]);
+  }, [persistedName, persistedRoom, locked]);
 
-  // Screen 1: Name entry
-  if (!persistedName) {
+  // Screen 1: Name and room entry
+  if (!persistedName || !persistedRoom) {
     return (
       <div className="container entry-screen">
         <h1>BUZZER</h1>
         <div className="entry-card">
-          <p>Enter your name to join</p>
-          <form onSubmit={handleNameSubmit}>
+          <p>Enter your name and room code to join</p>
+          <form onSubmit={handleNameAndRoomSubmit}>
             <input
               ref={nameInputRef}
               type="text"
@@ -208,6 +273,14 @@ export default function Page() {
               onChange={(e) => setName(e.target.value)}
               placeholder="Your name"
               autoFocus
+            />
+            <input
+              ref={roomInputRef}
+              type="text"
+              value={roomCode}
+              onChange={(e) => setRoomCode(e.target.value.toUpperCase().slice(0, 4))}
+              placeholder="Room code (leave blank for new)"
+              maxLength="4"
             />
             <button type="submit">Join Game</button>
           </form>
@@ -217,46 +290,87 @@ export default function Page() {
   }
 
   // Screen 2: Buzz screen
+  const isOwner = owner === persistedName;
   return (
     <div className={`container buzz-screen ${flash ? 'flash' : ''}`}>
-      <h1>BUZZER</h1>
+      <div className="buzz-header">
+        <h1>BUZZER</h1>
+        <div className="room-badge">ROOM {persistedRoom}</div>
+      </div>
 
-      <button className="buzz-btn" onClick={handleBuzz}>
-        <span className="buzz-text">BUZZ</span>
+      <button
+        className={`buzz-btn ${locked ? 'locked' : ''}`}
+        onClick={handleBuzz}
+        disabled={locked}
+      >
+        <span className="buzz-text">{locked ? 'LOCKED' : 'BUZZ'}</span>
         <span className="buzz-hint">or press SPACE</span>
       </button>
 
-      <div className="buzzer-list">
-        {buzzes.length === 0 ? (
-          <div className="empty-state">Waiting for buzzers...</div>
-        ) : (
-          buzzes.map((buzz, idx) => (
-            <div
-              key={`${buzz.name}-${idx}`}
-              className={`buzz-row ${idx === 0 ? 'first-place' : ''} ${
-                buzz.name === persistedName ? 'is-you' : ''
-              }`}
-            >
-              <span className="rank">{idx + 1}</span>
-              <span className="buzz-name">{buzz.name}</span>
-              {idx > 0 && (
-                <span className="delta">+{buzz.delta}ms</span>
-              )}
-              {idx === 0 && buzz.name === persistedName && (
-                <span className="you-badge">You're first!</span>
-              )}
+      <div className="main-content">
+        <div className="buzzer-list">
+          {buzzes.length === 0 ? (
+            <div className="empty-state">Waiting for buzzers...</div>
+          ) : (
+            buzzes.map((buzz, idx) => (
+              <div
+                key={`${buzz.name}-${idx}`}
+                className={`buzz-row ${idx === 0 ? 'first-place' : ''} ${
+                  buzz.name === persistedName ? 'is-you' : ''
+                }`}
+              >
+                <span className="rank">{idx + 1}</span>
+                <span className="buzz-name">{buzz.name}</span>
+                {idx > 0 && (
+                  <span className="delta">+{buzz.delta}ms</span>
+                )}
+                {idx === 0 && buzz.name === persistedName && (
+                  <span className="you-badge">You're first!</span>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="sidebar">
+          <div className="presence-panel">
+            <div className="presence-title">Players</div>
+            <div className="presence-list">
+              {users.map((user) => (
+                <div
+                  key={user.name}
+                  className={`presence-item ${user.isOwner ? 'is-owner' : ''} ${
+                    user.name === persistedName ? 'is-you' : ''
+                  }`}
+                >
+                  {user.isOwner && <span className="host-tag">HOST</span>}
+                  <span className="player-name">{user.name}</span>
+                </div>
+              ))}
             </div>
-          ))
-        )}
+          </div>
+        </div>
       </div>
 
       <div className="controls">
-        <button className="reset-btn" onClick={handleReset}>
-          Reset Round
-        </button>
+        {isOwner && (
+          <div className="host-bar">
+            <button className="host-btn lock-btn" onClick={handleLock}>
+              {locked ? 'UNLOCK' : 'LOCK'}
+            </button>
+            <button className="host-btn reset-btn" onClick={handleReset}>
+              Reset Round
+            </button>
+          </div>
+        )}
         <div className="player-info">
-          Playing as: <strong>{persistedName}</strong>
-          {ping !== null && <span> · ping {ping}ms</span>}
+          <div>
+            Playing as: <strong>{persistedName}</strong>
+            {ping !== null && <span> · ping {ping}ms</span>}
+          </div>
+          <button className="leave-btn" onClick={handleLeaveRoom}>
+            Leave room
+          </button>
         </div>
       </div>
     </div>

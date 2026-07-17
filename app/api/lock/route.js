@@ -1,11 +1,11 @@
-import { initState, getRoom, resetBuzzes, broadcastToRoom } from '@/lib/state';
+import { initState, getRoom, setLocked, broadcastToRoom } from '@/lib/state';
 
 export async function POST(request) {
   initState();
 
   const body = await request.json();
   const roomCode = (body.room || '').toUpperCase();
-  const { name } = body;
+  const { name, locked } = body;
 
   if (!name || typeof name !== 'string' || !name.trim()) {
     return Response.json({ error: 'Invalid name' }, { status: 400 });
@@ -21,11 +21,10 @@ export async function POST(request) {
     return Response.json({ error: 'Not owner' }, { status: 403 });
   }
 
-  resetBuzzes(room);
+  setLocked(room, Boolean(locked));
   const event = {
-    type: 'reset',
-    buzzes: [],
-    locked: true,
+    type: 'lock',
+    locked: Boolean(locked),
   };
   broadcastToRoom(room, event);
 

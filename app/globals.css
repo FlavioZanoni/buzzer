@@ -76,6 +76,13 @@ h1 {
   box-shadow: 0 0 0 3px rgba(255, 204, 0, 0.2);
 }
 
+.entry-card input:last-of-type {
+  margin-bottom: 20px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 700;
+}
+
 .entry-card button {
   width: 100%;
   padding: 14px 20px;
@@ -104,6 +111,28 @@ h1 {
 .buzz-screen {
   justify-content: flex-start;
   transition: background 0.3s;
+}
+
+.buzz-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  position: relative;
+  width: 100%;
+  justify-content: center;
+}
+
+.room-badge {
+  background: rgba(255, 204, 0, 0.15);
+  border: 2px solid #FFCC00;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #FFCC00;
+  text-transform: uppercase;
+  box-shadow: 0 0 12px rgba(255, 204, 0, 0.2);
 }
 
 .buzz-screen.flash {
@@ -159,6 +188,24 @@ h1 {
   transform: scale(0.98);
 }
 
+.buzz-btn.locked {
+  background: radial-gradient(circle at 35% 35%, #888888, #666666);
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: scale(1);
+}
+
+.buzz-btn.locked:hover {
+  transform: scale(1);
+  box-shadow: inset -3px -3px 8px rgba(0, 0, 0, 0.4),
+              inset 3px 3px 8px rgba(255, 255, 255, 0.1),
+              0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.buzz-btn.locked:active {
+  transform: scale(1);
+}
+
 .buzz-text {
   display: block;
   margin-bottom: 8px;
@@ -171,15 +218,96 @@ h1 {
   letter-spacing: 0.5px;
 }
 
+/* Main Content Layout */
+.main-content {
+  display: flex;
+  gap: 20px;
+  width: 100%;
+  max-width: 800px;
+  flex: 1;
+  padding: 0 20px;
+  align-items: flex-start;
+}
+
 /* Buzzer List */
 .buzzer-list {
-  width: 100%;
-  max-width: 500px;
   flex: 1;
+  max-width: 500px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 0 20px;
+}
+
+/* Sidebar */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 160px;
+}
+
+.presence-panel {
+  background: rgba(6, 12, 233, 0.3);
+  border: 1px solid rgba(255, 204, 0, 0.3);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.presence-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #FFCC00;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.presence-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.presence-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #e0e0e0;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.presence-item.is-owner {
+  background: rgba(255, 204, 0, 0.1);
+  color: #FFCC00;
+  font-weight: 600;
+}
+
+.presence-item.is-you {
+  background: rgba(255, 204, 0, 0.15);
+  border-left: 2px solid #FFCC00;
+  padding-left: 4px;
+}
+
+.host-tag {
+  display: inline-block;
+  background: #FFCC00;
+  color: #060CE9;
+  font-size: 10px;
+  font-weight: 900;
+  padding: 1px 4px;
+  border-radius: 3px;
+  line-height: 1;
+}
+
+.player-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .empty-state {
@@ -261,12 +389,46 @@ h1 {
 /* Controls */
 .controls {
   width: 100%;
-  max-width: 500px;
+  max-width: 800px;
   display: flex;
   flex-direction: column;
   gap: 12px;
   align-items: center;
   padding: 0 20px 20px 20px;
+}
+
+.host-bar {
+  display: flex;
+  gap: 8px;
+  background: rgba(255, 204, 0, 0.1);
+  border: 1px solid rgba(255, 204, 0, 0.3);
+  border-radius: 6px;
+  padding: 8px 12px;
+  align-items: center;
+  justify-content: center;
+}
+
+.host-btn {
+  padding: 10px 16px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  border: 1px solid #FFCC00;
+  background: transparent;
+  color: #FFCC00;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.host-btn:hover {
+  background: rgba(255, 204, 0, 0.15);
+  box-shadow: 0 2px 8px rgba(255, 204, 0, 0.15);
+}
+
+.host-btn:active {
+  transform: scale(0.98);
 }
 
 .reset-btn {
@@ -296,11 +458,39 @@ h1 {
   font-size: 13px;
   color: #cccccc;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
 }
 
 .player-info strong {
   color: #FFCC00;
   font-weight: 700;
+}
+
+.leave-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border: 1px solid rgba(255, 204, 0, 0.5);
+  background: transparent;
+  color: rgba(255, 204, 0, 0.7);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.leave-btn:hover {
+  color: #FFCC00;
+  border-color: #FFCC00;
+  background: rgba(255, 204, 0, 0.05);
+}
+
+.leave-btn:active {
+  transform: scale(0.98);
 }
 
 /* Responsive */
@@ -314,6 +504,16 @@ h1 {
     margin-top: 8px;
   }
 
+  .buzz-header {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .room-badge {
+    font-size: 10px;
+    padding: 4px 8px;
+  }
+
   .entry-card {
     padding: 30px 20px;
   }
@@ -322,8 +522,19 @@ h1 {
     margin: 20px 0;
   }
 
-  .buzzer-list {
+  .main-content {
+    flex-direction: column;
     padding: 0 16px;
+    gap: 16px;
+    align-items: stretch;
+  }
+
+  .buzzer-list {
+    padding: 0;
+  }
+
+  .sidebar {
+    min-width: auto;
   }
 
   .buzz-row {
@@ -341,5 +552,19 @@ h1 {
 
   .controls {
     padding: 0 16px 16px 16px;
+  }
+
+  .host-bar {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .host-btn {
+    padding: 8px 12px;
+    font-size: 11px;
+  }
+
+  .player-info {
+    font-size: 12px;
   }
 }
