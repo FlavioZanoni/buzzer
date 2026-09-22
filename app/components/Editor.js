@@ -42,6 +42,15 @@ const KIND_ICONS = {
   youtube: '▶️',
 };
 
+const DEFAULT_BONUS = {
+  value: 1000,
+  kind: 'empty',
+  content: '',
+  answerKind: 'empty',
+  answer: '',
+  tip: '',
+};
+
 export default function Editor({
   game,
   persistedName,
@@ -49,13 +58,21 @@ export default function Editor({
   onDone,
 }) {
   const [categories, setCategories] = useState([]);
+  const [bonus, setBonus] = useState(DEFAULT_BONUS);
   const [selectedCell, setSelectedCell] = useState(null);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [loading, setLoading] = useState(true);
   const saveTimerRef = useRef(null);
   const fileInputRef = useRef(null);
   const clueFileInputRef = useRef(null);
   const answerFileInputRef = useRef(null);
+  const bonusFileInputRef = useRef(null);
+  const bonusAnswerFileInputRef = useRef(null);
+  // Refs mirror the latest state so a debounced save always sends both
+  // pieces fresh, even when only one of them just changed.
+  const categoriesRef = useRef([]);
+  const bonusRef = useRef(DEFAULT_BONUS);
 
   // Load full board on mount
   useEffect(() => {
@@ -65,7 +82,11 @@ export default function Editor({
           `/api/board?room=${persistedRoom}&name=${encodeURIComponent(persistedName)}`
         );
         const { game: fullGame } = await res.json();
+        categoriesRef.current = fullGame.categories;
         setCategories(fullGame.categories);
+        const loadedBonus = fullGame.bonus || DEFAULT_BONUS;
+        bonusRef.current = loadedBonus;
+        setBonus(loadedBonus);
         setLoading(false);
       } catch (e) {
         console.error('Failed to load board:', e);
@@ -79,56 +100,112 @@ export default function Editor({
   const handleCategoryChange = (idx, newName) => {
     const updated = [...categories];
     updated[idx].name = newName;
+    categoriesRef.current = updated;
     setCategories(updated);
-    triggerSave(updated);
+    triggerSave();
   };
 
   const handleClueChange = (catIdx, rowIdx, newContent) => {
     const updated = [...categories];
     updated[catIdx].clues[rowIdx].content = newContent;
     updated[catIdx].clues[rowIdx].kind = detectKind(newContent);
+    categoriesRef.current = updated;
     setCategories(updated);
-    triggerSave(updated);
+    triggerSave();
   };
 
   const handleAnswerChange = (catIdx, rowIdx, newContent) => {
     const updated = [...categories];
     updated[catIdx].clues[rowIdx].answer = newContent;
     updated[catIdx].clues[rowIdx].answerKind = detectKind(newContent);
+    categoriesRef.current = updated;
     setCategories(updated);
-    triggerSave(updated);
+    triggerSave();
   };
 
-  const triggerSave = (categoriesToSave) => {
+  const handleTipChange = (catIdx, rowIdx, newTip) => {
+    const updated = [...categories];
+    updated[catIdx].clues[rowIdx].tip = newTip;
+    categoriesRef.current = updated;
+    setCategories(updated);
+    triggerSave();
+  };
+
+  const handleBonusValueChange = (newValue) => {
+    const updated = { ...bonus, value: newValue };
+    bonusRef.current = updated;
+    setBonus(updated);
+    triggerSave();
+  };
+
+  const handleBonusContentChange = (newContent) => {
+    const updated = { ...bonus, content: newContent, kind: detectKind(newContent) };
+    bonusRef.current = updated;
+    setBonus(updated);
+    triggerSave();
+  };
+
+  const handleBonusAnswerChange = (newContent) => {
+    const updated = { ...bonus, answer: newContent, answerKind: detectKind(newContent) };
+    bonusRef.current = updated;
+    setBonus(updated);
+    triggerSave();
+  };
+
+  const handleBonusTipChange = (newTip) => {
+    const updated = { ...bonus, tip: newTip };
+    bonusRef.current = updated;
+    setBonus(updated);
+    triggerSave();
+  };
+
+  const triggerSave = () => {
     clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
-      performSave(categoriesToSave);
+      performSave();
     }, 800);
   };
 
-  const performSave = async (categoriesToSave) => {
+  const performSave = async () => {
     try {
-      await fetch('/api/board', {
+      const res = await fetch('/api/board', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           room: persistedRoom,
           name: persistedName,
-          categories: categoriesToSave.map((cat) => ({
+          categories: categoriesRef.current.map((cat) => ({
             name: cat.name,
             clues: cat.clues.map((clue) => ({
               kind: clue.kind,
               content: clue.content,
               answerKind: clue.answerKind || 'empty',
               answer: clue.answer || '',
+              tip: clue.tip || '',
             })),
           })),
+          bonus: {
+            value: Number(bonusRef.current.value) || DEFAULT_BONUS.value,
+            kind: bonusRef.current.kind || 'empty',
+            content: bonusRef.current.content || '',
+            answerKind: bonusRef.current.answerKind || 'empty',
+            answer: bonusRef.current.answer || '',
+            tip: bonusRef.current.tip || '',
+          },
         }),
       });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({}));
+        console.error('Save rejected:', error);
+        setSaveError(error || 'Save failed');
+        return;
+      }
+      setSaveError('');
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
       console.error('Save failed:', e);
+      setSaveError('Save failed');
     }
   };
 
@@ -167,6 +244,39 @@ export default function Editor({
     }
   };
 
+  const uploadBonusImage = async (file, isAnswer = false) => {
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image too large (max 5MB)');
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `/api/image?room=${persistedRoom}&name=${encodeURIComponent(persistedName)}`,
+        {
+          method: 'POST',
+          headers: { 'content-type': file.type },
+          body: file,
+        }
+      );
+
+      if (!response.ok) {
+        alert('Image upload failed');
+        return;
+      }
+
+      const json = await response.json();
+      if (isAnswer) {
+        handleBonusAnswerChange(json.url);
+      } else {
+        handleBonusContentChange(json.url);
+      }
+    } catch (err) {
+      console.error('Upload error:', err);
+      alert('Image upload failed');
+    }
+  };
+
   const rowCount = categories[0]?.clues.length || 0;
 
   const changeShape = (which, delta) => {
@@ -186,6 +296,7 @@ export default function Editor({
             content: '',
             answerKind: 'empty',
             answer: '',
+            tip: '',
             used: false,
           })),
         });
@@ -203,6 +314,7 @@ export default function Editor({
             content: '',
             answerKind: 'empty',
             answer: '',
+            tip: '',
             used: false,
           });
         } else {
@@ -211,8 +323,9 @@ export default function Editor({
       });
     }
     setSelectedCell(null);
+    categoriesRef.current = updated;
     setCategories(updated);
-    triggerSave(updated);
+    triggerSave();
   };
 
   const handlePaste = async (catIdx, rowIdx, e, isAnswer = false) => {
@@ -271,6 +384,7 @@ export default function Editor({
           <button onClick={() => changeShape('rows', 1)}>+</button>
         </div>
         {saved && <div className="saved-indicator">✓ Saved</div>}
+        {saveError && <div className="save-error-indicator">⚠ {saveError}</div>}
       </div>
 
       <div className="editor-content">
@@ -315,6 +429,7 @@ export default function Editor({
                     <div className="cell-top">
                       <span className="cell-value">${cellClue.value}</span>
                       {hasAnswer && <span className="answer-badge">A</span>}
+                      {cellClue.tip && <span className="tip-badge">💡</span>}
                     </div>
                     <span className="cell-kind-icon">{KIND_ICONS[cellClue.kind] || '?'}</span>
                     {!isFilled && <span className="cell-unfilled">+</span>}
@@ -323,6 +438,109 @@ export default function Editor({
               })}
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Bonus Question — standalone, worth its own value, separate from the board */}
+      <div className="bonus-editor modal-section">
+        <div className="section-header">
+          <h3>⭐ Bonus Question</h3>
+          <span className="section-hint">
+            separate from the board — still an open buzzer race, just worth more
+          </span>
+        </div>
+
+        <div className="bonus-value-row">
+          <label htmlFor="bonus-value">Value</label>
+          <span className="bonus-value-prefix">$</span>
+          <input
+            id="bonus-value"
+            type="number"
+            min="1"
+            value={bonus.value}
+            onChange={(e) => handleBonusValueChange(e.target.value)}
+            className="bonus-value-input"
+          />
+        </div>
+
+        <div className="content-input-group">
+          <div className="section-hint">Clue — shown to everyone once launched</div>
+          <textarea
+            value={bonus.content || ''}
+            onChange={(e) => handleBonusContentChange(e.target.value)}
+            placeholder="Enter clue text, image URL, audio URL, or YouTube link"
+            className="content-textarea"
+          />
+        </div>
+        <div className="upload-actions">
+          <button
+            className="btn btn-secondary"
+            onClick={() => bonusFileInputRef.current?.click()}
+          >
+            📤 Upload Image
+          </button>
+          <input
+            ref={bonusFileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) uploadBonusImage(file, false);
+              e.target.value = '';
+            }}
+            style={{ display: 'none' }}
+          />
+        </div>
+        {bonus.kind !== 'empty' && (
+          <div className="preview-section">
+            <div className="preview-label">Preview</div>
+            <MediaContent kind={bonus.kind} content={bonus.content} />
+          </div>
+        )}
+
+        <div className="content-input-group">
+          <div className="section-hint">Answer — shown after judging</div>
+          <textarea
+            value={bonus.answer || ''}
+            onChange={(e) => handleBonusAnswerChange(e.target.value)}
+            placeholder="Enter answer text, image URL, audio URL, or YouTube link"
+            className="content-textarea"
+          />
+        </div>
+        <div className="upload-actions">
+          <button
+            className="btn btn-secondary"
+            onClick={() => bonusAnswerFileInputRef.current?.click()}
+          >
+            📤 Upload Image
+          </button>
+          <input
+            ref={bonusAnswerFileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) uploadBonusImage(file, true);
+              e.target.value = '';
+            }}
+            style={{ display: 'none' }}
+          />
+        </div>
+        {(bonus.answerKind || 'empty') !== 'empty' && (
+          <div className="preview-section">
+            <div className="preview-label">Preview</div>
+            <MediaContent kind={bonus.answerKind || 'empty'} content={bonus.answer || ''} />
+          </div>
+        )}
+
+        <div className="content-input-group">
+          <div className="section-hint">💡 Tip — optional hint, host reveals it on demand</div>
+          <textarea
+            value={bonus.tip || ''}
+            onChange={(e) => handleBonusTipChange(e.target.value)}
+            placeholder="Optional hint text, shown only when the host reveals it"
+            className="content-textarea"
+          />
         </div>
       </div>
 
@@ -482,6 +700,29 @@ export default function Editor({
                   <MediaContent kind={clue.answerKind || 'empty'} content={clue.answer || ''} />
                 </div>
               )}
+            </div>
+
+            {/* TIP Section */}
+            <div className="modal-section">
+              <div className="section-header">
+                <h3>💡 Tip</h3>
+                <span className="section-hint">optional hint — host reveals it on demand</span>
+              </div>
+
+              <div className="content-input-group">
+                <textarea
+                  value={clue.tip || ''}
+                  onChange={(e) =>
+                    handleTipChange(
+                      selectedCell.cat,
+                      selectedCell.row,
+                      e.target.value
+                    )
+                  }
+                  placeholder="Optional hint text, shown only when the host reveals it"
+                  className="content-textarea"
+                />
+              </div>
             </div>
 
             <div className="modal-footer">

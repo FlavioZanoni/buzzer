@@ -351,6 +351,15 @@ export default function Page() {
     });
   };
 
+  const handleLaunchBonus = async () => {
+    if (!persistedRoom || owner !== persistedName) return;
+    await fetch('/api/bonus', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ room: persistedRoom, name: persistedName }),
+    });
+  };
+
   // Spacebar listener
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -478,6 +487,22 @@ export default function Page() {
 
       <div className="game-main">
         <div className="grid-container">
+          {game?.bonus?.filled && (
+            <div className={`bonus-banner ${game.bonus.used ? 'used' : ''}`}>
+              <span className="bonus-banner-label">
+                ⭐ BONUS QUESTION · ${game.bonus.value}
+              </span>
+              {game.bonus.used ? (
+                <span className="bonus-banner-status">played</span>
+              ) : isOwner ? (
+                <button className="host-btn bonus-launch-btn" onClick={handleLaunchBonus}>
+                  Launch
+                </button>
+              ) : (
+                <span className="bonus-banner-status">available</span>
+              )}
+            </div>
+          )}
           {game ? (
             <Grid game={game} isOwner={isOwner} persistedName={persistedName} persistedRoom={persistedRoom} />
           ) : (

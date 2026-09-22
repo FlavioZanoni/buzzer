@@ -1,4 +1,4 @@
-import { initState, getRoom, updateBoard, broadcastToRoom, publicGame, persistRoom } from '@/lib/state';
+import { initState, getRoom, updateBoard, updateBonus, broadcastToRoom, publicGame, persistRoom } from '@/lib/state';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,7 +36,7 @@ export async function POST(request) {
 
   const body = await request.json();
   const roomCode = (body.room || '').toUpperCase();
-  const { name, categories } = body;
+  const { name, categories, bonus } = body;
 
   if (!roomCode || !/^[A-Z]{4}$/.test(roomCode)) {
     return Response.json({ error: 'Invalid room code' }, { status: 400 });
@@ -111,11 +111,51 @@ export async function POST(request) {
           );
         }
       }
+
+      if (clue.tip !== undefined) {
+        if (typeof clue.tip !== 'string' || clue.tip.length > 2000) {
+          return Response.json(
+            { error: 'Tip must be a string <= 2000 chars' },
+            { status: 400 }
+          );
+        }
+      }
+    }
+  }
+
+  // Validate the optional standalone bonus question
+  if (bonus !== undefined) {
+    const KINDS = ['empty', 'text', 'image', 'audio', 'youtube'];
+    if (typeof bonus !== 'object' || bonus === null) {
+      return Response.json({ error: 'Invalid bonus question' }, { status: 400 });
+    }
+    if (!Number.isFinite(Number(bonus.value)) || Number(bonus.value) <= 0) {
+      return Response.json({ error: 'Bonus value must be a positive number' }, { status: 400 });
+    }
+    if (!bonus.kind || !KINDS.includes(bonus.kind)) {
+      return Response.json({ error: 'Invalid bonus kind' }, { status: 400 });
+    }
+    if (bonus.answerKind && !KINDS.includes(bonus.answerKind)) {
+      return Response.json({ error: 'Invalid bonus answer kind' }, { status: 400 });
+    }
+    for (const field of [bonus.content || '', bonus.answer || '']) {
+      if (typeof field !== 'string' || field.length > 2_000_000) {
+        return Response.json(
+          { error: 'Bonus content must be a string <= 2,000,000 chars' },
+          { status: 400 }
+        );
+      }
+    }
+    if (bonus.tip !== undefined && (typeof bonus.tip !== 'string' || bonus.tip.length > 2000)) {
+      return Response.json({ error: 'Bonus tip must be a string <= 2000 chars' }, { status: 400 });
     }
   }
 
   // Update board and broadcast
   updateBoard(room, categories);
+  if (bonus !== undefined) {
+    updateBonus(room, bonus);
+  }
   persistRoom(room.code, room);
 
   const gameEvent = {

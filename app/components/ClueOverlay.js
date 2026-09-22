@@ -85,7 +85,7 @@ export default function ClueOverlay({
   };
 
   const { active } = game;
-  const category = game.categories[active.cat];
+  const category = active.isBonus ? null : game.categories[active.cat];
   const isOwner = owner === persistedName;
   const isAttempted = active.attempted?.includes(persistedName);
   const firstBuzzer = buzzes[0];
@@ -118,6 +118,14 @@ export default function ClueOverlay({
     });
   };
 
+  const handleRevealTip = async () => {
+    await fetch('/api/tip', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ room: persistedRoom, name: persistedName }),
+    });
+  };
+
   const buzzerOpen = !!game.buzzerOpen;
   const toggleBuzzer = async () => {
     await fetch('/api/buzzer', {
@@ -140,7 +148,10 @@ export default function ClueOverlay({
       <div className="clue-container">
         <div className="clue-header">
           <div className="clue-title">
-            <span className="category-name">{category.name}</span>
+            {active.isBonus && <span className="bonus-tag">⭐ BONUS</span>}
+            <span className="category-name">
+              {active.isBonus ? 'BONUS QUESTION' : category.name}
+            </span>
             <span className="clue-value">${active.value}</span>
           </div>
           {timerEndsAt > 0 && remainingMs !== null && (
@@ -156,6 +167,20 @@ export default function ClueOverlay({
         <div className="clue-content">
           <MediaContent kind={active.kind} content={active.content} />
         </div>
+
+        {active.hasTip && (
+          <div className="clue-tip">
+            {active.tipRevealed ? (
+              <div className="clue-tip-text">💡 {active.tip}</div>
+            ) : isOwner ? (
+              <button className="btn btn-secondary tip-reveal-btn" onClick={handleRevealTip}>
+                💡 Reveal Tip
+              </button>
+            ) : (
+              <div className="clue-tip-pending">💡 Tip available — ask the host</div>
+            )}
+          </div>
+        )}
 
         {/* Buzz list for players, judge bar for host */}
         <div className="clue-bottom">

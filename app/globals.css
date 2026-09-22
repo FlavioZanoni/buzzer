@@ -1253,6 +1253,18 @@ h1 {
   animation: fadeInOut 2s ease-in-out;
 }
 
+.save-error-indicator {
+  position: absolute;
+  right: 20px;
+  padding: 8px 16px;
+  background: rgba(244, 67, 54, 0.2);
+  border: 1px solid #F44336;
+  border-radius: 4px;
+  color: #F44336;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 @keyframes fadeInOut {
   0%, 100% {
     opacity: 0;
@@ -2377,4 +2389,121 @@ h1 {
   color: rgba(255, 255, 255, 0.45);
   font-size: 14px;
   letter-spacing: 0.5px;
+}
+
+/* Bonus question */
+.bonus-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  max-width: 900px;
+  padding: 10px 16px;
+  margin-bottom: 12px;
+  background: rgba(255, 204, 0, 0.12);
+  border: 1px solid rgba(255, 204, 0, 0.4);
+  border-radius: 6px;
+}
+
+.bonus-banner.used {
+  opacity: 0.5;
+}
+
+.bonus-banner-label {
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #FFCC00;
+  font-size: 14px;
+}
+
+.bonus-banner-status {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.bonus-launch-btn {
+  padding: 6px 14px;
+}
+
+.bonus-tag {
+  padding: 4px 10px;
+  background: #FFCC00;
+  color: #060CE9;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  border-radius: 4px;
+}
+
+.bonus-editor {
+  width: 100%;
+  max-width: 900px;
+  margin-top: 20px;
+}
+
+.bonus-value-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bonus-value-row label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.bonus-value-prefix {
+  color: #FFCC00;
+  font-weight: 700;
+}
+
+.bonus-value-input {
+  width: 100px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 204, 0, 0.3);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #000;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.tip-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+/* Tip reveal (in the active-clue overlay) */
+.clue-tip {
+  display: flex;
+  justify-content: center;
+}
+
+.clue-tip-text {
+  padding: 10px 16px;
+  background: rgba(255, 204, 0, 0.1);
+  border: 1px solid rgba(255, 204, 0, 0.4);
+  border-radius: 6px;
+  color: #ffffff;
+  font-size: 16px;
+  text-align: center;
+}
+
+.clue-tip-pending {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.45);
+  font-style: italic;
+}
+
+.tip-reveal-btn {
+  padding: 8px 16px;
+  font-size: 13px;
 }
