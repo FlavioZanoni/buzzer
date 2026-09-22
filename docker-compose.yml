@@ -1,8 +1,6 @@
 services:
   buzzer:
     build: .
-    ports:
-      - "3000:3000"
     volumes:
       # Persists data/buzzer.db (rooms + clue images) across restarts/redeploys.
       # Bind-mounted to ./data so backups are just a file copy.
