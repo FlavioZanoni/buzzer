@@ -46,24 +46,29 @@ export default function ClueOverlay({
   const beepedRef = useRef(false);
 
   // Tick the countdown against the server clock (endsAt is server time)
+  // Each new endsAt is a new timer — including one that replaces a running
+  // or expired timer — so the progress bar and time-up beep reset per timer.
   useEffect(() => {
+    beepedRef.current = false;
+    setInitialRemainingMs(null);
     if (!timerEndsAt) {
       setRemainingMs(null);
-      setInitialRemainingMs(null);
-      beepedRef.current = false;
       return;
     }
+    let initial = null;
     const tick = () => {
       const left = Math.max(
         0,
         timerEndsAt - (offsetRef?.current || 0) - Date.now()
       );
       setRemainingMs(left);
-      // Capture initial remaining time when timer first starts
-      if (initialRemainingMs === null && left > 0) {
+      if (initial === null && left > 0) {
+        initial = left;
         setInitialRemainingMs(left);
       }
-      if (left === 0 && !beepedRef.current) {
+      // Only beep for a countdown we actually watched run out, not one that
+      // had already expired when we (re)joined
+      if (left === 0 && initial !== null && !beepedRef.current) {
         beepedRef.current = true;
         playTimeUp();
       }
@@ -71,7 +76,7 @@ export default function ClueOverlay({
     tick();
     const id = setInterval(tick, 100);
     return () => clearInterval(id);
-  }, [timerEndsAt, offsetRef, initialRemainingMs]);
+  }, [timerEndsAt, offsetRef]);
 
   if (!game?.active) return null;
 
@@ -194,7 +199,7 @@ export default function ClueOverlay({
                     className={`winner-chip ${firstBuzzer?.name === p ? 'buzzed-first' : ''}`}
                     onClick={() => handleJudge('correct', p)}
                   >
-                    {firstBuzzer?.name === p && <span className="chip-bell">🔔 </span>}
+                    {firstBuzzer?.name === p && <span>🔔 </span>}
                     {p}
                   </button>
                 ))}

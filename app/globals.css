@@ -2567,3 +2567,176 @@ h1 {
   font-weight: 400;
   color: rgba(255, 255, 255, 0.6);
 }
+
+/* ===== Layout fixes (appended last so they win over earlier duplicates) ===== */
+
+/* Centered screens/overlays: auto margins center when there's room but, unlike
+   justify/align-items: center, never push the top out of reach when the
+   content is taller than the screen (short phones, open keyboard). */
+.entry-screen {
+  justify-content: flex-start;
+  overflow-y: auto;
+}
+.entry-screen > :first-child {
+  margin-top: auto;
+}
+.entry-screen > :last-child {
+  margin-bottom: auto;
+}
+
+.clue-overlay,
+.reveal-overlay,
+.editor-modal-overlay {
+  align-items: flex-start;
+  justify-content: flex-start;
+  overflow-y: auto;
+}
+.clue-container,
+.reveal-container,
+.editor-modal {
+  margin: auto;
+  flex-shrink: 0;
+}
+
+.entry-card input::placeholder {
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 500;
+}
+
+.my-room-info > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Board: rows share the available height instead of forcing square cells,
+   so every row stays on screen; it only scrolls if rows would get tinier
+   than the cell minimum. */
+.game-main {
+  min-height: 0;
+}
+/* Fixed-width scoreboard: a long player name ellipsizes instead of
+   widening the column and squeezing the board */
+.scoreboard-container {
+  flex: 0 0 clamp(280px, 25vw, 360px);
+  width: clamp(280px, 25vw, 360px);
+}
+.grid-container {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+}
+.grid,
+.grid-body {
+  flex: 1 0 auto;
+}
+.grid-row {
+  flex: 1 0 auto;
+}
+.grid-cell {
+  aspect-ratio: auto;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 2px;
+}
+/* The editor also has a .cell-value/.cell-unfilled; scope the board's */
+.grid-cell .cell-value {
+  font-size: clamp(12px, min(2vw, 3.5vh), 28px);
+  font-weight: 900;
+}
+.grid-cell .cell-unfilled {
+  font-size: clamp(14px, 2vw, 24px);
+}
+
+/* Editor: category names sit above their own column */
+.category-inputs {
+  grid-template-columns: repeat(var(--cols, 6), minmax(0, 1fr));
+}
+.category-input {
+  min-width: 0;
+  width: 100%;
+}
+.editor-cell {
+  min-width: 0;
+}
+
+@media (max-width: 600px) {
+  /* Board: scroll the whole main area instead of clipping the grid */
+  .game-main {
+    overflow-y: auto;
+    padding: 0;
+  }
+  .grid-container,
+  .scoreboard-container {
+    flex: none;
+    overflow: visible;
+  }
+  .scoreboard-container {
+    width: 100%;
+  }
+  .grid {
+    padding: 6px;
+    gap: 4px;
+  }
+  .grid-header,
+  .grid-row,
+  .grid-body {
+    gap: 4px;
+  }
+  .category-header {
+    letter-spacing: 0;
+    min-height: 40px;
+    padding: 2px;
+  }
+  .grid-cell {
+    min-height: 40px;
+    border-width: 1px;
+  }
+
+  /* Editor */
+  .editor-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .editor-header h1 {
+    width: 100%;
+    text-align: center;
+  }
+  .shape-controls {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .saved-indicator,
+  .save-error-indicator {
+    position: static;
+  }
+  .editor-content {
+    padding: 0;
+  }
+  /* Names get their own labeled 2-up list; columns are too narrow to type in */
+  .category-inputs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .editor-row {
+    gap: 4px;
+  }
+  .editor-cell {
+    aspect-ratio: auto;
+    min-height: 56px;
+    padding: 4px 2px;
+    gap: 2px;
+    border-width: 1px;
+  }
+  .editor-cell .cell-top {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 2px;
+  }
+  .editor-cell .cell-value {
+    font-size: 11px;
+  }
+  .editor-cell .cell-kind-icon {
+    font-size: 16px;
+  }
+}

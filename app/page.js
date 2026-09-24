@@ -189,6 +189,7 @@ export default function Page() {
       if (data.type === 'init') {
         setBuzzes(data.buzzes);
         applyLock(data.locked, data.unlockAt);
+        setTimerEndsAt(data.timerEndsAt || 0);
         setOwner(data.owner);
         setUsers(data.users || []);
         if (data.game) {
@@ -234,8 +235,12 @@ export default function Page() {
     const filled = game.categories
       .flatMap((c) => c.clues)
       .filter((cl) => cl.filled);
+    const bonusDone = !game.bonus?.filled || game.bonus.used;
     const over =
-      filled.length > 0 && filled.every((cl) => cl.used) && !game.active;
+      filled.length > 0 &&
+      filled.every((cl) => cl.used) &&
+      bonusDone &&
+      !game.active;
 
     if (prevOverRef.current === null) {
       prevOverRef.current = over;
@@ -340,6 +345,12 @@ export default function Page() {
     setLocked(true);
     setOwner('');
     setBuzzes([]);
+    // Drop the old room's board/banner so the next room starts clean (and
+    // joining an already-finished room doesn't fire confetti)
+    setGame(null);
+    setCelebration(null);
+    setTimerEndsAt(0);
+    prevOverRef.current = null;
   };
 
   const handleCopyLink = async () => {

@@ -62,6 +62,7 @@ export async function GET(request) {
         })),
         locked: room.locked,
         unlockAt: room.unlockAt || 0,
+        timerEndsAt: room.timerEndsAt || 0,
         owner: room.owner,
         users: users.map((u) => ({
           name: u.name,

@@ -35,7 +35,7 @@ function detectKind(content) {
 }
 
 const MAX_UPLOAD = 5 * 1024 * 1024;
-const SAFE_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+const SAFE_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml'];
 
 // Phone photos are often too big, HEIC (which other browsers can't show), or
 // come with no MIME type at all. Re-encode those to a JPEG capped at 2048px;
@@ -135,68 +135,63 @@ export default function Editor({
     loadBoard();
   }, [persistedRoom, persistedName]);
 
-  // Autosave with debounce
+  // Autosave with debounce. Every edit builds on the refs (the latest state),
+  // not this render's closure: an image upload resolves seconds later, and
+  // must not roll back whatever the host typed or reshaped in the meantime.
+  const commitCategories = (updated) => {
+    categoriesRef.current = updated;
+    setCategories(updated);
+    triggerSave();
+  };
+
+  const patchClue = (catIdx, rowIdx, patch) => {
+    commitCategories(
+      categoriesRef.current.map((cat, c) =>
+        c !== catIdx
+          ? cat
+          : {
+              ...cat,
+              clues: cat.clues.map((clue, r) =>
+                r === rowIdx ? { ...clue, ...patch } : clue
+              ),
+            }
+      )
+    );
+  };
+
   const handleCategoryChange = (idx, newName) => {
-    const updated = [...categories];
-    updated[idx].name = newName;
-    categoriesRef.current = updated;
-    setCategories(updated);
-    triggerSave();
+    commitCategories(
+      categoriesRef.current.map((cat, c) =>
+        c === idx ? { ...cat, name: newName } : cat
+      )
+    );
   };
 
-  const handleClueChange = (catIdx, rowIdx, newContent) => {
-    const updated = [...categories];
-    updated[catIdx].clues[rowIdx].content = newContent;
-    updated[catIdx].clues[rowIdx].kind = detectKind(newContent);
-    categoriesRef.current = updated;
-    setCategories(updated);
-    triggerSave();
-  };
+  const handleClueChange = (catIdx, rowIdx, newContent) =>
+    patchClue(catIdx, rowIdx, { content: newContent, kind: detectKind(newContent) });
 
-  const handleAnswerChange = (catIdx, rowIdx, newContent) => {
-    const updated = [...categories];
-    updated[catIdx].clues[rowIdx].answer = newContent;
-    updated[catIdx].clues[rowIdx].answerKind = detectKind(newContent);
-    categoriesRef.current = updated;
-    setCategories(updated);
-    triggerSave();
-  };
+  const handleAnswerChange = (catIdx, rowIdx, newContent) =>
+    patchClue(catIdx, rowIdx, { answer: newContent, answerKind: detectKind(newContent) });
 
-  const handleTipChange = (catIdx, rowIdx, newTip) => {
-    const updated = [...categories];
-    updated[catIdx].clues[rowIdx].tip = newTip;
-    categoriesRef.current = updated;
-    setCategories(updated);
-    triggerSave();
-  };
+  const handleTipChange = (catIdx, rowIdx, newTip) =>
+    patchClue(catIdx, rowIdx, { tip: newTip });
 
-  const handleBonusValueChange = (newValue) => {
-    const updated = { ...bonus, value: newValue };
+  const patchBonus = (patch) => {
+    const updated = { ...bonusRef.current, ...patch };
     bonusRef.current = updated;
     setBonus(updated);
     triggerSave();
   };
 
-  const handleBonusContentChange = (newContent) => {
-    const updated = { ...bonus, content: newContent, kind: detectKind(newContent) };
-    bonusRef.current = updated;
-    setBonus(updated);
-    triggerSave();
-  };
+  const handleBonusValueChange = (newValue) => patchBonus({ value: newValue });
 
-  const handleBonusAnswerChange = (newContent) => {
-    const updated = { ...bonus, answer: newContent, answerKind: detectKind(newContent) };
-    bonusRef.current = updated;
-    setBonus(updated);
-    triggerSave();
-  };
+  const handleBonusContentChange = (newContent) =>
+    patchBonus({ content: newContent, kind: detectKind(newContent) });
 
-  const handleBonusTipChange = (newTip) => {
-    const updated = { ...bonus, tip: newTip };
-    bonusRef.current = updated;
-    setBonus(updated);
-    triggerSave();
-  };
+  const handleBonusAnswerChange = (newContent) =>
+    patchBonus({ answer: newContent, answerKind: detectKind(newContent) });
+
+  const handleBonusTipChange = (newTip) => patchBonus({ tip: newTip });
 
   const triggerSave = () => {
     clearTimeout(saveTimerRef.current);
@@ -300,7 +295,8 @@ export default function Editor({
   const rowCount = categories[0]?.clues.length || 0;
 
   const changeShape = (which, delta) => {
-    const updated = categories.map((c) => ({
+    const rowCount = categoriesRef.current[0]?.clues.length || 0;
+    const updated = categoriesRef.current.map((c) => ({
       ...c,
       clues: [...c.clues],
     }));
@@ -409,7 +405,7 @@ export default function Editor({
 
       <div className="editor-content">
         {/* Category names */}
-        <div className="category-inputs">
+        <div className="category-inputs" style={{ '--cols': categories.length }}>
           {categories.map((cat, idx) => (
             <input
               key={idx}
