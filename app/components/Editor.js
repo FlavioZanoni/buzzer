@@ -34,6 +34,45 @@ function detectKind(content) {
   return 'text';
 }
 
+const MAX_UPLOAD = 5 * 1024 * 1024;
+const SAFE_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+
+// Phone photos are often too big, HEIC (which other browsers can't show), or
+// come with no MIME type at all. Re-encode those to a JPEG capped at 2048px;
+// files that are already fine go up untouched (keeps GIFs animated).
+async function prepareImage(file) {
+  if (SAFE_IMAGE_TYPES.includes(file.type) && file.size <= MAX_UPLOAD) {
+    return file;
+  }
+
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch (e) {
+    throw new Error(
+      "This browser can't read that image. Try a PNG or JPG (or a screenshot of it)."
+    );
+  }
+  const scale = Math.min(1, 2048 / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  const ctx = canvas.getContext('2d');
+  // JPEG has no alpha: paint white first so transparent PNGs don't go black
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+
+  const blob = await new Promise((resolve) =>
+    canvas.toBlob(resolve, 'image/jpeg', 0.85)
+  );
+  if (!blob || blob.size > MAX_UPLOAD) {
+    throw new Error('Image too large (max 5MB)');
+  }
+  return blob;
+}
+
 const KIND_ICONS = {
   empty: '∅',
   text: '📝',
@@ -209,71 +248,52 @@ export default function Editor({
     }
   };
 
-  const uploadImage = async (file, catIdx, rowIdx, isAnswer = false) => {
-    // Client-side size check
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Image too large (max 5MB)');
-      return;
-    }
-
-    // Upload the image
+  // Uploads an image and returns its /api/image URL, or null after telling
+  // the host why it failed (the server's reason, not a generic message).
+  const postImage = async (file) => {
     try {
+      const image = await prepareImage(file);
       const response = await fetch(
         `/api/image?room=${persistedRoom}&name=${encodeURIComponent(persistedName)}`,
         {
           method: 'POST',
-          headers: { 'content-type': file.type },
-          body: file,
+          headers: { 'content-type': image.type },
+          body: image,
         }
       );
 
       if (!response.ok) {
-        alert('Image upload failed');
-        return;
+        const { error } = await response.json().catch(() => ({}));
+        alert(`Image upload failed: ${error || `HTTP ${response.status}`}`);
+        return null;
       }
 
       const json = await response.json();
-      if (isAnswer) {
-        handleAnswerChange(catIdx, rowIdx, json.url);
-      } else {
-        handleClueChange(catIdx, rowIdx, json.url);
-      }
+      return json.url;
     } catch (err) {
       console.error('Upload error:', err);
-      alert('Image upload failed');
+      alert(`Image upload failed: ${err.message}`);
+      return null;
+    }
+  };
+
+  const uploadImage = async (file, catIdx, rowIdx, isAnswer = false) => {
+    const url = await postImage(file);
+    if (!url) return;
+    if (isAnswer) {
+      handleAnswerChange(catIdx, rowIdx, url);
+    } else {
+      handleClueChange(catIdx, rowIdx, url);
     }
   };
 
   const uploadBonusImage = async (file, isAnswer = false) => {
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Image too large (max 5MB)');
-      return;
-    }
-
-    try {
-      const response = await fetch(
-        `/api/image?room=${persistedRoom}&name=${encodeURIComponent(persistedName)}`,
-        {
-          method: 'POST',
-          headers: { 'content-type': file.type },
-          body: file,
-        }
-      );
-
-      if (!response.ok) {
-        alert('Image upload failed');
-        return;
-      }
-
-      const json = await response.json();
-      if (isAnswer) {
-        handleBonusAnswerChange(json.url);
-      } else {
-        handleBonusContentChange(json.url);
-      }
-    } catch (err) {
-      console.error('Upload error:', err);
-      alert('Image upload failed');
+    const url = await postImage(file);
+    if (!url) return;
+    if (isAnswer) {
+      handleBonusAnswerChange(url);
+    } else {
+      handleBonusContentChange(url);
     }
   };
 

@@ -272,6 +272,43 @@ export default function Page() {
   }, [game, persistedName]);
 
   const [roomError, setRoomError] = useState('');
+  const [myRooms, setMyRooms] = useState([]);
+
+  // Rooms hosted under the typed name, so a host who left (or switched
+  // devices) can get back to a board they already built.
+  useEffect(() => {
+    const typed = name.trim();
+    if (!typed || (persistedName && persistedRoom)) {
+      setMyRooms([]);
+      return;
+    }
+    let stale = false;
+    const id = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/rooms?name=${encodeURIComponent(typed)}`);
+        const { rooms } = await res.json();
+        if (!stale) setMyRooms(rooms || []);
+      } catch (e) {
+        if (!stale) setMyRooms([]);
+      }
+    }, 300);
+    return () => {
+      stale = true;
+      clearTimeout(id);
+    };
+  }, [name, persistedName, persistedRoom]);
+
+  // Rejoin with the room's exact owner name — ownership is a plain name match,
+  // so "flavia" would otherwise join Flávia's room as a regular player.
+  const handleRejoinRoom = (room) => {
+    setPersistedName(room.owner);
+    setPersistedRoom(room.code);
+    localStorage.setItem('buzzer_name', room.owner);
+    localStorage.setItem('buzzer_room', room.code);
+    setName('');
+    setRoomCode('');
+    unlockAudio();
+  };
 
   const handleNameAndRoomSubmit = (e) => {
     e.preventDefault();
@@ -409,6 +446,31 @@ export default function Page() {
             {roomError && <p className="form-error">{roomError}</p>}
             <button type="submit">Join Game</button>
           </form>
+          {myRooms.length > 0 && (
+            <div className="my-rooms">
+              <div className="my-rooms-title">Rooms you host</div>
+              {myRooms.map((r) => (
+                <button
+                  key={r.code}
+                  type="button"
+                  className="my-room"
+                  onClick={() => handleRejoinRoom(r)}
+                >
+                  <span className="my-room-code">{r.code}</span>
+                  <span className="my-room-info">
+                    {r.categories.length > 0
+                      ? r.categories.join(' · ')
+                      : 'Untitled board'}
+                    <small>
+                      {r.filled}/{r.total} clues
+                      {r.updated > 0 &&
+                        ` · ${new Date(r.updated).toLocaleDateString()}`}
+                    </small>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     );

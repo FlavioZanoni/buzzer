@@ -2507,3 +2507,63 @@ h1 {
   padding: 8px 16px;
   font-size: 13px;
 }
+
+/* Entry screen: rooms the typed name already hosts */
+.my-rooms {
+  margin-top: 24px;
+  text-align: left;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.my-rooms-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(255, 204, 0, 0.8);
+  margin-bottom: 8px;
+}
+
+.entry-card button.my-room {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 204, 0, 0.4);
+  color: #fff;
+}
+
+.entry-card button.my-room:hover {
+  border-color: #FFCC00;
+  box-shadow: none;
+}
+
+.my-room-code {
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #FFCC00;
+}
+
+.my-room-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.my-room-info small {
+  font-size: 12px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.6);
+}
