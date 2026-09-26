@@ -2,7 +2,11 @@ services:
   buzzer:
     build: .
     volumes:
-      # Persists data/buzzer.db (rooms + clue images) across restarts/redeploys.
-      # Bind-mounted to ./data so backups are just a file copy.
-      - ./data:/app/data
+      # A named volume, NOT a ./data bind mount: Dokploy re-clones the repo
+      # folder on every deploy, which wiped ./data and every room with it.
+      # Holds data/buzzer.db (rooms + clue images) and data/backups.
+      - buzzer-data:/app/data
     restart: unless-stopped
+
+volumes:
+  buzzer-data:

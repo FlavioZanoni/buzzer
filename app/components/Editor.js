@@ -104,6 +104,9 @@ export default function Editor({
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  // Another tab/device saved this board since we loaded it
+  const [conflict, setConflict] = useState(false);
   // Image being framed: { cat, row, isAnswer } for a board clue, or
   // { bonus: true, isAnswer } for the bonus question
   const [adjusting, setAdjusting] = useState(null);
@@ -119,28 +122,57 @@ export default function Editor({
   // pieces fresh, even when only one of them just changed.
   const categoriesRef = useRef([]);
   const bonusRef = useRef(DEFAULT_BONUS);
+  // Save bookkeeping: the board revision our edits build on, whether there
+  // are edits the server hasn't stored yet, and the save in progress.
+  const revRef = useRef(null);
+  const dirtyRef = useRef(false);
+  const inFlightRef = useRef(null);
+  const conflictRef = useRef(false);
+  const forceRef = useRef(false);
 
-  // Load full board on mount
+  const loadBoard = async () => {
+    setLoading(true);
+    setLoadError(false);
+    try {
+      const res = await fetch(
+        `/api/board?room=${persistedRoom}&name=${encodeURIComponent(persistedName)}`
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const { game: fullGame } = await res.json();
+      categoriesRef.current = fullGame.categories;
+      setCategories(fullGame.categories);
+      const loadedBonus = fullGame.bonus || DEFAULT_BONUS;
+      bonusRef.current = loadedBonus;
+      setBonus(loadedBonus);
+      revRef.current = fullGame.boardRev || 0;
+      dirtyRef.current = false;
+      conflictRef.current = false;
+      setConflict(false);
+      setSaveError('');
+    } catch (e) {
+      // Never show an empty editor here: it would look like the board is gone
+      console.error('Failed to load board:', e);
+      setLoadError(true);
+    }
+    setLoading(false);
+  };
+
   useEffect(() => {
-    const loadBoard = async () => {
-      try {
-        const res = await fetch(
-          `/api/board?room=${persistedRoom}&name=${encodeURIComponent(persistedName)}`
-        );
-        const { game: fullGame } = await res.json();
-        categoriesRef.current = fullGame.categories;
-        setCategories(fullGame.categories);
-        const loadedBonus = fullGame.bonus || DEFAULT_BONUS;
-        bonusRef.current = loadedBonus;
-        setBonus(loadedBonus);
-        setLoading(false);
-      } catch (e) {
-        console.error('Failed to load board:', e);
-        setLoading(false);
-      }
-    };
     loadBoard();
   }, [persistedRoom, persistedName]);
+
+  // Closing or reloading the tab with unsaved edits asks first
+  useEffect(() => {
+    const onBeforeUnload = (e) => {
+      if (dirtyRef.current || inFlightRef.current) {
+        flushSave();
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, []);
 
   // Autosave with debounce. Every edit builds on the refs (the latest state),
   // not this render's closure: an image upload resolves seconds later, and
@@ -227,13 +259,38 @@ export default function Editor({
   const handleBonusTipChange = (newTip) => patchBonus({ tip: newTip });
 
   const triggerSave = () => {
+    dirtyRef.current = true;
     clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
-      performSave();
-    }, 800);
+    saveTimerRef.current = setTimeout(flushSave, 800);
+  };
+
+  // Saves run one at a time, each based on the revision the previous one
+  // returned, so overlapping autosaves can't trip the conflict check.
+  const flushSave = async () => {
+    clearTimeout(saveTimerRef.current);
+    while (inFlightRef.current) await inFlightRef.current;
+    if (!dirtyRef.current || conflictRef.current) return;
+    dirtyRef.current = false;
+    inFlightRef.current = performSave().finally(() => {
+      inFlightRef.current = null;
+    });
+    await inFlightRef.current;
+  };
+
+  // A failed save keeps the edits marked unsaved; server/network failures
+  // (e.g. mid-redeploy) retry on their own.
+  const saveFailed = (message, retry) => {
+    dirtyRef.current = true;
+    setSaveError(message);
+    if (retry) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(flushSave, 3000);
+    }
   };
 
   const performSave = async () => {
+    const force = forceRef.current;
+    forceRef.current = false;
     try {
       const res = await fetch('/api/board', {
         method: 'POST',
@@ -241,6 +298,7 @@ export default function Editor({
         body: JSON.stringify({
           room: persistedRoom,
           name: persistedName,
+          baseRev: force ? null : revRef.current,
           categories: categoriesRef.current.map((cat) => ({
             name: cat.name,
             clues: cat.clues.map((clue) => ({
@@ -265,19 +323,48 @@ export default function Editor({
           },
         }),
       });
+      if (res.status === 409) {
+        dirtyRef.current = true;
+        conflictRef.current = true;
+        setConflict(true);
+        return;
+      }
       if (!res.ok) {
         const { error } = await res.json().catch(() => ({}));
         console.error('Save rejected:', error);
-        setSaveError(error || 'Save failed');
+        const retry = res.status >= 500;
+        saveFailed(`${error || 'Save failed'}${retry ? ' — retrying…' : ''}`, retry);
         return;
       }
+      const { rev } = await res.json();
+      if (Number.isInteger(rev)) revRef.current = rev;
       setSaveError('');
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
       console.error('Save failed:', e);
-      setSaveError('Save failed');
+      saveFailed('Not saved (connection) — retrying…', true);
     }
+  };
+
+  const keepMine = () => {
+    conflictRef.current = false;
+    setConflict(false);
+    forceRef.current = true;
+    dirtyRef.current = true;
+    flushSave();
+  };
+
+  const handleClose = async () => {
+    await flushSave();
+    if (
+      (dirtyRef.current || conflictRef.current) &&
+      !window.confirm('Some changes are not saved yet. Close the editor anyway?')
+    ) {
+      return;
+    }
+    clearTimeout(saveTimerRef.current);
+    onDone();
   };
 
   // Uploads an image and returns its /api/image URL, or null after telling
@@ -420,6 +507,18 @@ export default function Editor({
 
   if (loading) {
     return <div className="container entry-screen"><div>Loading board...</div></div>;
+  }
+
+  if (loadError) {
+    return (
+      <div className="container entry-screen">
+        <div>Couldn't load the board. It's still saved — try again.</div>
+        <div className="upload-actions">
+          <button className="btn btn-primary" onClick={loadBoard}>Retry</button>
+          <button className="btn btn-secondary" onClick={onDone}>Close</button>
+        </div>
+      </div>
+    );
   }
 
   const clue = selectedCell
@@ -842,6 +941,26 @@ export default function Editor({
         </div>
       )}
 
+      {conflict && (
+        <div className="editor-modal-overlay save-conflict-overlay">
+          <div className="editor-modal save-conflict">
+            <div className="modal-title">Board changed somewhere else</div>
+            <p>
+              This board was saved from another tab or device after you opened it here.
+              Your latest changes in this tab are <strong>not saved</strong>.
+            </p>
+            <div className="modal-footer">
+              <button className="btn btn-primary" onClick={loadBoard}>
+                Load the latest
+              </button>
+              <button className="btn btn-secondary" onClick={keepMine}>
+                Keep mine (overwrite)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {previewing && (
         <CardPreview
           isBonus={!!previewing.bonus}
@@ -866,7 +985,7 @@ export default function Editor({
       )}
 
       <div className="editor-footer">
-        <button className="btn btn-primary" onClick={onDone}>
+        <button className="btn btn-primary" onClick={handleClose}>
           CLOSE EDITOR
         </button>
       </div>

@@ -2935,3 +2935,16 @@ h1 {
 .card-preview-overlay .reveal-container {
   margin: 0 auto auto;
 }
+
+/* ===== Editor save conflict ===== */
+.save-conflict-overlay {
+  z-index: 300;
+}
+.editor-modal.save-conflict {
+  max-width: 480px;
+  gap: 16px;
+  line-height: 1.5;
+}
+.save-conflict .modal-footer {
+  flex-wrap: wrap;
+}

@@ -36,7 +36,7 @@ export async function POST(request) {
 
   const body = await request.json();
   const roomCode = (body.room || '').toUpperCase();
-  const { name, categories, bonus } = body;
+  const { name, categories, bonus, baseRev } = body;
 
   if (!roomCode || !/^[A-Z]{4}$/.test(roomCode)) {
     return Response.json({ error: 'Invalid room code' }, { status: 400 });
@@ -54,6 +54,17 @@ export async function POST(request) {
   const trimmedName = name.trim();
   if (room.owner !== trimmedName) {
     return Response.json({ error: 'Not owner' }, { status: 403 });
+  }
+
+  // Saves send the board revision their editor loaded. A mismatch means
+  // another tab/device saved since, and this (stale) board would silently
+  // overwrite that work. null (or an old client sending nothing) skips it.
+  const currentRev = room.game.boardRev || 0;
+  if (baseRev != null && baseRev !== currentRev) {
+    return Response.json(
+      { error: 'Board was changed in another tab or device', rev: currentRev },
+      { status: 409 }
+    );
   }
 
   // Validate categories: 1-10 columns, 1-10 uniform rows
@@ -156,7 +167,11 @@ export async function POST(request) {
   if (bonus !== undefined) {
     updateBonus(room, bonus);
   }
-  persistRoom(room.code, room);
+  room.game.boardRev = currentRev + 1;
+  if (!persistRoom(room.code, room)) {
+    // The editor keeps the edits and retries on a 5xx
+    return Response.json({ error: 'Could not save to disk' }, { status: 500 });
+  }
 
   const gameEvent = {
     type: 'game',
@@ -164,5 +179,5 @@ export async function POST(request) {
   };
   broadcastToRoom(room, gameEvent);
 
-  return Response.json({ ok: true });
+  return Response.json({ ok: true, rev: room.game.boardRev });
 }
