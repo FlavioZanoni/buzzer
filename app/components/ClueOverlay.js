@@ -170,7 +170,7 @@ export default function ClueOverlay({
         </div>
 
         <div className="clue-content">
-          <MediaContent kind={active.kind} content={active.content} />
+          <MediaContent kind={active.kind} content={active.content} view={active.view} />
         </div>
 
         {active.hasTip && (

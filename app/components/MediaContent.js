@@ -1,5 +1,7 @@
 'use client';
 
+import { sanitizeView, frameStyle, imageStyle } from '@/lib/imageView';
+
 // Extract YouTube ID from various URL formats
 function extractYouTubeId(content) {
   const patterns = [
@@ -12,7 +14,7 @@ function extractYouTubeId(content) {
   return null;
 }
 
-export default function MediaContent({ kind, content, isPreview = false }) {
+export default function MediaContent({ kind, content, view, isPreview = false }) {
   if (!kind || kind === 'empty') {
     return (
       <div className="media-content empty-placeholder">
@@ -30,6 +32,16 @@ export default function MediaContent({ kind, content, isPreview = false }) {
   }
 
   if (kind === 'image') {
+    const framing = sanitizeView(view);
+    if (framing) {
+      return (
+        <div className="media-content image-content framed">
+          <div className="image-frame" style={frameStyle(framing)}>
+            <img src={content} alt="Media" style={imageStyle(framing)} draggable={false} />
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="media-content image-content">
         <img src={content} alt="Media" />

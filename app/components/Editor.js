@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import MediaContent from './MediaContent';
+import ImageAdjuster from './ImageAdjuster';
+import CardPreview from './CardPreview';
 
 // Detect content type
 function detectKind(content) {
@@ -102,6 +104,11 @@ export default function Editor({
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [loading, setLoading] = useState(true);
+  // Image being framed: { cat, row, isAnswer } for a board clue, or
+  // { bonus: true, isAnswer } for the bonus question
+  const [adjusting, setAdjusting] = useState(null);
+  // Card shown in the local preview: { cat, row } or { bonus: true }
+  const [previewing, setPreviewing] = useState(null);
   const saveTimerRef = useRef(null);
   const fileInputRef = useRef(null);
   const clueFileInputRef = useRef(null);
@@ -167,11 +174,16 @@ export default function Editor({
     );
   };
 
+  // Changing the content drops its framing: it was set for the old image.
   const handleClueChange = (catIdx, rowIdx, newContent) =>
-    patchClue(catIdx, rowIdx, { content: newContent, kind: detectKind(newContent) });
+    patchClue(catIdx, rowIdx, { content: newContent, kind: detectKind(newContent), view: null });
 
   const handleAnswerChange = (catIdx, rowIdx, newContent) =>
-    patchClue(catIdx, rowIdx, { answer: newContent, answerKind: detectKind(newContent) });
+    patchClue(catIdx, rowIdx, {
+      answer: newContent,
+      answerKind: detectKind(newContent),
+      answerView: null,
+    });
 
   const handleTipChange = (catIdx, rowIdx, newTip) =>
     patchClue(catIdx, rowIdx, { tip: newTip });
@@ -186,10 +198,31 @@ export default function Editor({
   const handleBonusValueChange = (newValue) => patchBonus({ value: newValue });
 
   const handleBonusContentChange = (newContent) =>
-    patchBonus({ content: newContent, kind: detectKind(newContent) });
+    patchBonus({ content: newContent, kind: detectKind(newContent), view: null });
 
   const handleBonusAnswerChange = (newContent) =>
-    patchBonus({ answer: newContent, answerKind: detectKind(newContent) });
+    patchBonus({ answer: newContent, answerKind: detectKind(newContent), answerView: null });
+
+  // The image, kind and current framing that an adjuster target points at
+  const adjustTarget = (target) => {
+    const item = target.bonus
+      ? bonusRef.current
+      : categoriesRef.current[target.cat]?.clues[target.row];
+    if (!item) return null;
+    return target.isAnswer
+      ? { kind: item.answerKind, src: item.answer, view: item.answerView }
+      : { kind: item.kind, src: item.content, view: item.view };
+  };
+
+  const saveAdjustment = (view) => {
+    const field = adjusting.isAnswer ? 'answerView' : 'view';
+    if (adjusting.bonus) {
+      patchBonus({ [field]: view });
+    } else {
+      patchClue(adjusting.cat, adjusting.row, { [field]: view });
+    }
+    setAdjusting(null);
+  };
 
   const handleBonusTipChange = (newTip) => patchBonus({ tip: newTip });
 
@@ -216,6 +249,8 @@ export default function Editor({
               answerKind: clue.answerKind || 'empty',
               answer: clue.answer || '',
               tip: clue.tip || '',
+              view: clue.view || null,
+              answerView: clue.answerView || null,
             })),
           })),
           bonus: {
@@ -225,6 +260,8 @@ export default function Editor({
             answerKind: bonusRef.current.answerKind || 'empty',
             answer: bonusRef.current.answer || '',
             tip: bonusRef.current.tip || '',
+            view: bonusRef.current.view || null,
+            answerView: bonusRef.current.answerView || null,
           },
         }),
       });
@@ -280,6 +317,7 @@ export default function Editor({
     } else {
       handleClueChange(catIdx, rowIdx, url);
     }
+    setAdjusting({ cat: catIdx, row: rowIdx, isAnswer });
   };
 
   const uploadBonusImage = async (file, isAnswer = false) => {
@@ -290,6 +328,7 @@ export default function Editor({
     } else {
       handleBonusContentChange(url);
     }
+    setAdjusting({ bonus: true, isAnswer });
   };
 
   const rowCount = categories[0]?.clues.length || 0;
@@ -386,6 +425,7 @@ export default function Editor({
   const clue = selectedCell
     ? categories[selectedCell.cat].clues[selectedCell.row]
     : null;
+  const adjustingImage = adjusting ? adjustTarget(adjusting) : null;
 
   return (
     <div className="container editor-screen">
@@ -510,7 +550,15 @@ export default function Editor({
         {bonus.kind !== 'empty' && (
           <div className="preview-section">
             <div className="preview-label">Preview</div>
-            <MediaContent kind={bonus.kind} content={bonus.content} />
+            <MediaContent kind={bonus.kind} content={bonus.content} view={bonus.view} />
+            {bonus.kind === 'image' && (
+              <button
+                className="btn btn-secondary adjust-image-btn"
+                onClick={() => setAdjusting({ bonus: true, isAnswer: false })}
+              >
+                ✂️ Adjust image
+              </button>
+            )}
           </div>
         )}
 
@@ -545,7 +593,15 @@ export default function Editor({
         {(bonus.answerKind || 'empty') !== 'empty' && (
           <div className="preview-section">
             <div className="preview-label">Preview</div>
-            <MediaContent kind={bonus.answerKind || 'empty'} content={bonus.answer || ''} />
+            <MediaContent kind={bonus.answerKind || 'empty'} content={bonus.answer || ''} view={bonus.answerView} />
+            {bonus.answerKind === 'image' && (
+              <button
+                className="btn btn-secondary adjust-image-btn"
+                onClick={() => setAdjusting({ bonus: true, isAnswer: true })}
+              >
+                ✂️ Adjust image
+              </button>
+            )}
           </div>
         )}
 
@@ -557,6 +613,16 @@ export default function Editor({
             placeholder="Optional hint text, shown only when the host reveals it"
             className="content-textarea"
           />
+        </div>
+
+        <div className="upload-actions">
+          <button
+            className="btn btn-secondary"
+            disabled={bonus.kind === 'empty' && (bonus.answerKind || 'empty') === 'empty'}
+            onClick={() => setPreviewing({ bonus: true })}
+          >
+            👁 Preview card
+          </button>
         </div>
       </div>
 
@@ -644,7 +710,15 @@ export default function Editor({
               {clue.kind !== 'empty' && (
                 <div className="preview-section">
                   <div className="preview-label">Preview</div>
-                  <MediaContent kind={clue.kind} content={clue.content} />
+                  <MediaContent kind={clue.kind} content={clue.content} view={clue.view} />
+                  {clue.kind === 'image' && (
+                    <button
+                      className="btn btn-secondary adjust-image-btn"
+                      onClick={() => setAdjusting({ ...selectedCell, isAnswer: false })}
+                    >
+                      ✂️ Adjust image
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -713,7 +787,15 @@ export default function Editor({
               {(clue.answerKind || 'empty') !== 'empty' && (
                 <div className="preview-section">
                   <div className="preview-label">Preview</div>
-                  <MediaContent kind={clue.answerKind || 'empty'} content={clue.answer || ''} />
+                  <MediaContent kind={clue.answerKind || 'empty'} content={clue.answer || ''} view={clue.answerView} />
+                  {clue.answerKind === 'image' && (
+                    <button
+                      className="btn btn-secondary adjust-image-btn"
+                      onClick={() => setAdjusting({ ...selectedCell, isAnswer: true })}
+                    >
+                      ✂️ Adjust image
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -743,6 +825,13 @@ export default function Editor({
 
             <div className="modal-footer">
               <button
+                className="btn btn-secondary"
+                disabled={clue.kind === 'empty' && (clue.answerKind || 'empty') === 'empty'}
+                onClick={() => setPreviewing({ ...selectedCell })}
+              >
+                👁 Preview card
+              </button>
+              <button
                 className="btn btn-primary"
                 onClick={() => setSelectedCell(null)}
               >
@@ -751,6 +840,29 @@ export default function Editor({
             </div>
           </div>
         </div>
+      )}
+
+      {previewing && (
+        <CardPreview
+          isBonus={!!previewing.bonus}
+          category={previewing.bonus ? '' : categories[previewing.cat]?.name}
+          value={
+            previewing.bonus
+              ? bonus.value
+              : categories[previewing.cat]?.clues[previewing.row]?.value
+          }
+          item={previewing.bonus ? bonus : categories[previewing.cat].clues[previewing.row]}
+          onClose={() => setPreviewing(null)}
+        />
+      )}
+
+      {adjustingImage?.kind === 'image' && (
+        <ImageAdjuster
+          src={adjustingImage.src}
+          initialView={adjustingImage.view}
+          onSave={saveAdjustment}
+          onCancel={() => setAdjusting(null)}
+        />
       )}
 
       <div className="editor-footer">

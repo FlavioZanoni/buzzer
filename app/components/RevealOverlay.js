@@ -43,7 +43,7 @@ export default function RevealOverlay({
         </div>
 
         <div className="reveal-content">
-          <MediaContent kind={reveal.kind} content={reveal.content} />
+          <MediaContent kind={reveal.kind} content={reveal.content} view={reveal.view} />
         </div>
 
         <div className={`reveal-verdict ${isCorrect ? 'correct' : isSkip ? 'skip' : ''}`}>
