@@ -457,6 +457,7 @@ export default function Page() {
             {roomError && <p className="form-error">{roomError}</p>}
             <button type="submit">Join Game</button>
           </form>
+          <p className="app-version">v1.1 · rooms survive redeploys</p>
           {myRooms.length > 0 && (
             <div className="my-rooms">
               <div className="my-rooms-title">Rooms you host</div>

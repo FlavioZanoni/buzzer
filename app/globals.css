@@ -2948,3 +2948,10 @@ h1 {
 .save-conflict .modal-footer {
   flex-wrap: wrap;
 }
+
+.entry-card .app-version {
+  margin: 12px 0 0;
+  font-size: 11px;
+  opacity: 0.45;
+  letter-spacing: 0.5px;
+}
