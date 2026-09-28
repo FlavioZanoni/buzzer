@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import MediaContent from './MediaContent';
 import ImageAdjuster from './ImageAdjuster';
 import CardPreview from './CardPreview';
+import ZoomRevealEditor from './ZoomRevealEditor';
+import { MAX_CATEGORIES, MAX_ROWS } from '@/lib/limits';
 
 // Detect content type
 function detectKind(content) {
@@ -30,6 +32,11 @@ function detectKind(content) {
   // Audio URL
   if (/\.(mp3|ogg|wav|m4a)(\?.*)?$/i.test(content)) {
     return 'audio';
+  }
+
+  // Video file URL
+  if (/\.(mp4|webm|mov|m4v|ogv)(\?.*)?$/i.test(content)) {
+    return 'video';
   }
 
   // Fallback to text
@@ -80,6 +87,7 @@ const KIND_ICONS = {
   text: '📝',
   image: '🖼️',
   audio: '🔊',
+  video: '🎬',
   youtube: '▶️',
 };
 
@@ -208,7 +216,12 @@ export default function Editor({
 
   // Changing the content drops its framing: it was set for the old image.
   const handleClueChange = (catIdx, rowIdx, newContent) =>
-    patchClue(catIdx, rowIdx, { content: newContent, kind: detectKind(newContent), view: null });
+    patchClue(catIdx, rowIdx, {
+      content: newContent,
+      kind: detectKind(newContent),
+      view: null,
+      zoom: null,
+    });
 
   const handleAnswerChange = (catIdx, rowIdx, newContent) =>
     patchClue(catIdx, rowIdx, {
@@ -230,7 +243,7 @@ export default function Editor({
   const handleBonusValueChange = (newValue) => patchBonus({ value: newValue });
 
   const handleBonusContentChange = (newContent) =>
-    patchBonus({ content: newContent, kind: detectKind(newContent), view: null });
+    patchBonus({ content: newContent, kind: detectKind(newContent), view: null, zoom: null });
 
   const handleBonusAnswerChange = (newContent) =>
     patchBonus({ answer: newContent, answerKind: detectKind(newContent), answerView: null });
@@ -308,6 +321,7 @@ export default function Editor({
               answer: clue.answer || '',
               tip: clue.tip || '',
               view: clue.view || null,
+              zoom: clue.zoom || null,
               answerView: clue.answerView || null,
             })),
           })),
@@ -319,6 +333,7 @@ export default function Editor({
             answer: bonusRef.current.answer || '',
             tip: bonusRef.current.tip || '',
             view: bonusRef.current.view || null,
+            zoom: bonusRef.current.zoom || null,
             answerView: bonusRef.current.answerView || null,
           },
         }),
@@ -428,7 +443,7 @@ export default function Editor({
     }));
     if (which === 'cols') {
       const n = updated.length + delta;
-      if (n < 1 || n > 10) return;
+      if (n < 1 || n > MAX_CATEGORIES) return;
       if (delta > 0) {
         updated.push({
           name: '',
@@ -447,7 +462,7 @@ export default function Editor({
       }
     } else {
       const n = rowCount + delta;
-      if (n < 1 || n > 10) return;
+      if (n < 1 || n > MAX_ROWS) return;
       updated.forEach((c) => {
         if (delta > 0) {
           c.clues.push({
@@ -532,17 +547,20 @@ export default function Editor({
         <h1>EDIT BOARD</h1>
         <div className="shape-controls">
           <span>Categories: {categories.length}</span>
-          <button onClick={() => changeShape('cols', -1)}>−</button>
-          <button onClick={() => changeShape('cols', 1)}>+</button>
+          <button onClick={() => changeShape('cols', -1)} disabled={categories.length <= 1}>−</button>
+          <button onClick={() => changeShape('cols', 1)} disabled={categories.length >= MAX_CATEGORIES}>+</button>
           <span>Rows: {rowCount}</span>
-          <button onClick={() => changeShape('rows', -1)}>−</button>
-          <button onClick={() => changeShape('rows', 1)}>+</button>
+          <button onClick={() => changeShape('rows', -1)} disabled={rowCount <= 1}>−</button>
+          <button onClick={() => changeShape('rows', 1)} disabled={rowCount >= MAX_ROWS}>+</button>
         </div>
         {saved && <div className="saved-indicator">✓ Saved</div>}
         {saveError && <div className="save-error-indicator">⚠ {saveError}</div>}
       </div>
 
-      <div className="editor-content">
+      <div
+        className={`editor-content ${categories.length > 7 ? 'dense' : ''}`}
+        style={{ '--cols': categories.length }}
+      >
         {/* Category names */}
         <div className="category-inputs" style={{ '--cols': categories.length }}>
           {categories.map((cat, idx) => (
@@ -585,6 +603,9 @@ export default function Editor({
                       <span className="cell-value">${cellClue.value}</span>
                       {hasAnswer && <span className="answer-badge">A</span>}
                       {cellClue.tip && <span className="tip-badge">💡</span>}
+                      {cellClue.zoom && cellClue.kind === 'image' && (
+                        <span className="tip-badge">🔍</span>
+                      )}
                     </div>
                     <span className="cell-kind-icon">{KIND_ICONS[cellClue.kind] || '?'}</span>
                     {!isFilled && <span className="cell-unfilled">+</span>}
@@ -651,12 +672,20 @@ export default function Editor({
             <div className="preview-label">Preview</div>
             <MediaContent kind={bonus.kind} content={bonus.content} view={bonus.view} />
             {bonus.kind === 'image' && (
-              <button
-                className="btn btn-secondary adjust-image-btn"
-                onClick={() => setAdjusting({ bonus: true, isAnswer: false })}
-              >
-                ✂️ Adjust image
-              </button>
+              <>
+                <button
+                  className="btn btn-secondary adjust-image-btn"
+                  onClick={() => setAdjusting({ bonus: true, isAnswer: false })}
+                >
+                  ✂️ Adjust image
+                </button>
+                <ZoomRevealEditor
+                  src={bonus.content}
+                  view={bonus.view}
+                  zoom={bonus.zoom}
+                  onChange={(zoom) => patchBonus({ zoom })}
+                />
+              </>
             )}
           </div>
         )}
@@ -771,7 +800,7 @@ export default function Editor({
               </div>
 
               <div className="kind-chips">
-                {['TEXT', 'IMAGE', 'AUDIO', 'YOUTUBE'].map((kindLabel) => {
+                {['TEXT', 'IMAGE', 'AUDIO', 'VIDEO', 'YOUTUBE'].map((kindLabel) => {
                   const kindLower = kindLabel.toLowerCase();
                   const isActive = clue.kind === kindLower;
                   return (
@@ -803,7 +832,7 @@ export default function Editor({
               </div>
 
               <div className="hint-line">
-                💡 Paste text, an image (Ctrl+V or upload), an image/audio URL (.png .jpg .mp3 .ogg…), or a YouTube link
+                💡 Paste text, an image (Ctrl+V or upload), an image/audio/video URL (.png .jpg .mp3 .mp4…), or a YouTube link — videos and audio play in sync for everyone when you press play
               </div>
 
               {clue.kind !== 'empty' && (
@@ -811,12 +840,22 @@ export default function Editor({
                   <div className="preview-label">Preview</div>
                   <MediaContent kind={clue.kind} content={clue.content} view={clue.view} />
                   {clue.kind === 'image' && (
-                    <button
-                      className="btn btn-secondary adjust-image-btn"
-                      onClick={() => setAdjusting({ ...selectedCell, isAnswer: false })}
-                    >
-                      ✂️ Adjust image
-                    </button>
+                    <>
+                      <button
+                        className="btn btn-secondary adjust-image-btn"
+                        onClick={() => setAdjusting({ ...selectedCell, isAnswer: false })}
+                      >
+                        ✂️ Adjust image
+                      </button>
+                      <ZoomRevealEditor
+                        src={clue.content}
+                        view={clue.view}
+                        zoom={clue.zoom}
+                        onChange={(zoom) =>
+                          patchClue(selectedCell.cat, selectedCell.row, { zoom })
+                        }
+                      />
+                    </>
                   )}
                 </div>
               )}
@@ -848,7 +887,7 @@ export default function Editor({
               </div>
 
               <div className="kind-chips">
-                {['TEXT', 'IMAGE', 'AUDIO', 'YOUTUBE'].map((kindLabel) => {
+                {['TEXT', 'IMAGE', 'AUDIO', 'VIDEO', 'YOUTUBE'].map((kindLabel) => {
                   const kindLower = kindLabel.toLowerCase();
                   const isActive = (clue.answerKind || 'empty') === kindLower;
                   return (
@@ -880,7 +919,7 @@ export default function Editor({
               </div>
 
               <div className="hint-line">
-                💡 Paste text, an image (Ctrl+V or upload), an image/audio URL (.png .jpg .mp3 .ogg…), or a YouTube link
+                💡 Paste text, an image (Ctrl+V or upload), an image/audio/video URL (.png .jpg .mp3 .mp4…), or a YouTube link — videos and audio play in sync for everyone when you press play
               </div>
 
               {(clue.answerKind || 'empty') !== 'empty' && (

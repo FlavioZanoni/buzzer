@@ -530,6 +530,7 @@ export default function Page() {
         persistedName={persistedName}
         persistedRoom={persistedRoom}
         owner={owner}
+        offsetRef={offsetRef}
       />
     );
   }
@@ -559,7 +560,8 @@ export default function Page() {
         </div>
       </div>
 
-      <div className="game-main">
+      {/* Boards with lots of categories get more of a wide screen */}
+      <div className={`game-main ${(game?.categories?.length || 0) > 7 ? 'wide-board' : ''}`}>
         <div className="grid-container">
           {game?.bonus?.filled && (
             <div className={`bonus-banner ${game.bonus.used ? 'used' : ''}`}>

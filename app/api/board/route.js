@@ -1,4 +1,5 @@
 import { initState, getRoom, updateBoard, updateBonus, broadcastToRoom, publicGame, persistRoom } from '@/lib/state';
+import { KINDS, MAX_CATEGORIES, MAX_ROWS } from '@/lib/limits';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,21 +68,21 @@ export async function POST(request) {
     );
   }
 
-  // Validate categories: 1-10 columns, 1-10 uniform rows
+  // Validate categories: 1-MAX_CATEGORIES columns, 1-MAX_ROWS uniform rows
   if (
     !Array.isArray(categories) ||
     categories.length < 1 ||
-    categories.length > 10
+    categories.length > MAX_CATEGORIES
   ) {
     return Response.json(
-      { error: 'Must have 1-10 categories' },
+      { error: `Must have 1-${MAX_CATEGORIES} categories` },
       { status: 400 }
     );
   }
 
   const rows = categories[0]?.clues?.length;
-  if (!Number.isInteger(rows) || rows < 1 || rows > 10) {
-    return Response.json({ error: 'Must have 1-10 rows' }, { status: 400 });
+  if (!Number.isInteger(rows) || rows < 1 || rows > MAX_ROWS) {
+    return Response.json({ error: `Must have 1-${MAX_ROWS} rows` }, { status: 400 });
   }
 
   for (const cat of categories) {
@@ -99,7 +100,6 @@ export async function POST(request) {
       );
     }
 
-    const KINDS = ['empty', 'text', 'image', 'audio', 'youtube'];
     for (const clue of cat.clues) {
       if (!clue.kind || !KINDS.includes(clue.kind)) {
         return Response.json(
@@ -136,7 +136,6 @@ export async function POST(request) {
 
   // Validate the optional standalone bonus question
   if (bonus !== undefined) {
-    const KINDS = ['empty', 'text', 'image', 'audio', 'youtube'];
     if (typeof bonus !== 'object' || bonus === null) {
       return Response.json({ error: 'Invalid bonus question' }, { status: 400 });
     }

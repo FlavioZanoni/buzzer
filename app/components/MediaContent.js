@@ -1,6 +1,13 @@
 'use client';
 
-import { sanitizeView, frameStyle, imageStyle } from '@/lib/imageView';
+import {
+  sanitizeView,
+  sanitizeZoomReveal,
+  frameStyle,
+  imageStyle,
+  zoomRevealStyle,
+} from '@/lib/imageView';
+import { SyncedYouTube, SyncedFile } from './SyncedMedia';
 
 // Extract YouTube ID from various URL formats
 function extractYouTubeId(content) {
@@ -14,7 +21,10 @@ function extractYouTubeId(content) {
   return null;
 }
 
-export default function MediaContent({ kind, content, view, isPreview = false }) {
+// zoom: a "zoom reveal" { x, y, from, steps } plus the current `step`.
+// sync: live playback sync for audio/video/YouTube (see SyncedMedia);
+// without it the media just plays locally, as in the editor previews.
+export default function MediaContent({ kind, content, view, zoom, sync }) {
   if (!kind || kind === 'empty') {
     return (
       <div className="media-content empty-placeholder">
@@ -33,11 +43,31 @@ export default function MediaContent({ kind, content, view, isPreview = false })
 
   if (kind === 'image') {
     const framing = sanitizeView(view);
+    const zoomReveal = sanitizeZoomReveal(zoom);
+    // The zoom layer scales the (already framed) picture inside the frame,
+    // around a spot given in frame percent; the frame clips it.
+    const zoomStyle = zoomReveal ? zoomRevealStyle(zoomReveal, zoom.step || 0) : null;
     if (framing) {
+      const img = (
+        <img src={content} alt="Media" style={imageStyle(framing)} draggable={false} />
+      );
       return (
         <div className="media-content image-content framed">
           <div className="image-frame" style={frameStyle(framing)}>
-            <img src={content} alt="Media" style={imageStyle(framing)} draggable={false} />
+            {zoomStyle ? (
+              <div className="zoom-layer" style={zoomStyle}>{img}</div>
+            ) : (
+              img
+            )}
+          </div>
+        </div>
+      );
+    }
+    if (zoomStyle) {
+      return (
+        <div className="media-content image-content">
+          <div className="zoom-box">
+            <img src={content} alt="Media" style={zoomStyle} draggable={false} />
           </div>
         </div>
       );
@@ -45,6 +75,18 @@ export default function MediaContent({ kind, content, view, isPreview = false })
     return (
       <div className="media-content image-content">
         <img src={content} alt="Media" />
+      </div>
+    );
+  }
+
+  if ((kind === 'audio' || kind === 'video') && sync) {
+    return <SyncedFile key={content} kind={kind} src={content} sync={sync} />;
+  }
+
+  if (kind === 'video') {
+    return (
+      <div className="media-content video-content">
+        <video src={content} controls playsInline preload="metadata" className="synced-video" />
       </div>
     );
   }
@@ -62,6 +104,9 @@ export default function MediaContent({ kind, content, view, isPreview = false })
 
   if (kind === 'youtube') {
     const youtubeId = extractYouTubeId(content);
+    if (youtubeId && sync) {
+      return <SyncedYouTube key={youtubeId} videoId={youtubeId} sync={sync} />;
+    }
     if (youtubeId) {
       return (
         <div className="media-content youtube-content">

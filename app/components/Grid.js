@@ -34,8 +34,13 @@ export default function Grid({ game, isOwner, persistedName, persistedRoom }) {
     gridTemplateColumns: `repeat(${categories.length}, minmax(0, 1fr))`,
   };
 
+  // --cols drives the font sizes and minimum column width (globals.css), so
+  // long boards shrink their text before they squeeze or overflow
   return (
-    <div className="grid">
+    <div
+      className={`grid ${categories.length > 7 ? 'dense' : ''}`}
+      style={{ '--cols': categories.length }}
+    >
       <div className="grid-header" style={cols}>
         {categories.map((cat, idx) => (
           <div key={idx} className="category-header">

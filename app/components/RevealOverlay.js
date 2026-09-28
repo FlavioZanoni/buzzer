@@ -7,6 +7,7 @@ export default function RevealOverlay({
   persistedName,
   persistedRoom,
   owner,
+  offsetRef,
 }) {
   if (!game?.reveal || game.active) {
     return null;
@@ -43,7 +44,28 @@ export default function RevealOverlay({
         </div>
 
         <div className="reveal-content">
-          <MediaContent kind={reveal.kind} content={reveal.content} view={reveal.view} />
+          <MediaContent
+            kind={reveal.kind}
+            content={reveal.content}
+            view={reveal.view}
+            sync={{
+              state: reveal.media,
+              isHost: isOwner,
+              offsetRef,
+              onReport: (playing, pos) =>
+                fetch('/api/media', {
+                  method: 'POST',
+                  headers: { 'content-type': 'application/json' },
+                  body: JSON.stringify({
+                    room: persistedRoom,
+                    name: persistedName,
+                    target: 'answer',
+                    playing,
+                    pos,
+                  }),
+                }).catch(() => {}),
+            }}
+          />
         </div>
 
         <div className={`reveal-verdict ${isCorrect ? 'correct' : isSkip ? 'skip' : ''}`}>

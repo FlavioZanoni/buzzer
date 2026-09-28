@@ -131,6 +131,36 @@ export default function ClueOverlay({
     });
   };
 
+  const setZoomStep = async (step) => {
+    await fetch('/api/zoom', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ room: persistedRoom, name: persistedName, step }),
+    });
+  };
+
+  // Host's player drives everyone's (see SyncedMedia)
+  const mediaSync = {
+    state: active.media,
+    isHost: isOwner,
+    offsetRef,
+    onReport: (playing, pos) =>
+      fetch('/api/media', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          room: persistedRoom,
+          name: persistedName,
+          target: 'clue',
+          playing,
+          pos,
+        }),
+      }).catch(() => {}),
+  };
+
+  const zoom = active.zoom;
+  const zoomedIn = zoom && zoom.step < zoom.steps;
+
   const buzzerOpen = !!game.buzzerOpen;
   const toggleBuzzer = async () => {
     await fetch('/api/buzzer', {
@@ -170,8 +200,48 @@ export default function ClueOverlay({
         </div>
 
         <div className="clue-content">
-          <MediaContent kind={active.kind} content={active.content} view={active.view} />
+          <MediaContent
+            kind={active.kind}
+            content={active.content}
+            view={active.view}
+            zoom={zoom}
+            sync={mediaSync}
+          />
         </div>
+
+        {zoom && isOwner && (
+          <div className="zoom-controls">
+            <button
+              className="judge-btn"
+              disabled={zoom.step <= 0}
+              onClick={() => setZoomStep(zoom.step - 1)}
+            >
+              ＋ Zoom in
+            </button>
+            <span className="zoom-progress">
+              🔍 {zoom.step}/{zoom.steps}
+            </span>
+            <button
+              className="judge-btn zoom-out-btn"
+              disabled={!zoomedIn}
+              onClick={() => setZoomStep(zoom.step + 1)}
+            >
+              − Zoom out
+            </button>
+            <button
+              className="judge-btn"
+              disabled={!zoomedIn}
+              onClick={() => setZoomStep(zoom.steps)}
+            >
+              Show all
+            </button>
+          </div>
+        )}
+        {zoom && !isOwner && zoomedIn && (
+          <div className="zoom-controls zoom-hint">
+            🔍 Zoomed in — the host will zoom out bit by bit
+          </div>
+        )}
 
         {active.hasTip && (
           <div className="clue-tip">

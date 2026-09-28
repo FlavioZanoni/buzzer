@@ -2,12 +2,16 @@
 
 import { useState, useEffect } from 'react';
 import MediaContent from './MediaContent';
+import { sanitizeZoomReveal } from '@/lib/imageView';
 
 // Host-only, local mock of the in-game clue and answer screens, so the
 // host can check how a card looks without opening it (which would use it).
 export default function CardPreview({ category, value, isBonus, item, onClose }) {
   const hasAnswer = (item.answerKind || 'empty') !== 'empty';
   const [side, setSide] = useState(item.kind !== 'empty' || !hasAnswer ? 'clue' : 'answer');
+  // Zoom reveal: step through it locally, like the host will in the game
+  const zoom = item.kind === 'image' ? sanitizeZoomReveal(item.zoom) : null;
+  const [zoomStep, setZoomStep] = useState(0);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -52,8 +56,34 @@ export default function CardPreview({ category, value, isBonus, item, onClose })
             </div>
           </div>
           <div className="clue-content">
-            <MediaContent kind={item.kind} content={item.content} view={item.view} />
+            <MediaContent
+              kind={item.kind}
+              content={item.content}
+              view={item.view}
+              zoom={zoom && { ...zoom, step: zoomStep }}
+            />
           </div>
+          {zoom && (
+            <div className="zoom-controls">
+              <button
+                className="judge-btn"
+                disabled={zoomStep <= 0}
+                onClick={() => setZoomStep(zoomStep - 1)}
+              >
+                ＋ Zoom in
+              </button>
+              <span className="zoom-progress">
+                🔍 {zoomStep}/{zoom.steps}
+              </span>
+              <button
+                className="judge-btn zoom-out-btn"
+                disabled={zoomStep >= zoom.steps}
+                onClick={() => setZoomStep(zoomStep + 1)}
+              >
+                − Zoom out
+              </button>
+            </div>
+          )}
           {item.tip && (
             <div className="clue-tip">
               <div className="clue-tip-text">💡 {item.tip}</div>
